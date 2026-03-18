@@ -4,7 +4,7 @@ import { MenuBook, MenuPage } from "@/types/menu";
 import { usePageFlip } from "@/hooks/usePageFlip";
 import CoverPage from "./CoverPage";
 import FlexiblePage from "./FlexiblePage";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 
 interface BookViewerProps {
   menuBook: MenuBook;
@@ -97,6 +97,11 @@ export default function BookViewer({
     isFirst,
     isLast,
   } = usePageFlip(pages.length, initialPage);
+  const dragX = useMotionValue(0);
+  const dragTilt = useTransform(dragX, [-180, 0, 180], [10, 0, -10]);
+  const dragScale = useTransform(dragX, [-180, 0, 180], [0.992, 1, 0.992]);
+  const leftEdgeShade = useTransform(dragX, [0, 180], [0, 0.24]);
+  const rightEdgeShade = useTransform(dragX, [-180, 0], [0.24, 0]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -115,7 +120,7 @@ export default function BookViewer({
 
   // Swipe gesture handler
   const handleDragEnd = (event: any, info: any) => {
-    const swipeThreshold = 50;
+    const swipeThreshold = fullScreen ? 70 : 50;
     const velocityThreshold = 500;
     
     if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
@@ -123,6 +128,8 @@ export default function BookViewer({
     } else if (info.offset.x > swipeThreshold || info.velocity.x > velocityThreshold) {
       goBackward();
     }
+
+    dragX.set(0);
   };
 
   // Dimensions for the single page
@@ -150,10 +157,13 @@ export default function BookViewer({
             key={currentPage}
             custom={flipDirection}
             variants={pageTurnVariants}
-            drag="x"
+            drag={isAnimating ? false : "x"}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
             dragMomentum={false}
+            dragTransition={{ bounceStiffness: 320, bounceDamping: 24 }}
+            whileDrag={{ cursor: "grabbing" }}
+            style={{ x: dragX }}
             onDragEnd={handleDragEnd}
             initial="initial"
             animate="animate"
@@ -162,16 +172,22 @@ export default function BookViewer({
               duration: 0.55,
               ease: [0.2, 0.85, 0.2, 1],
             }}
-            style={{ 
-              transformStyle: "preserve-3d",
-            }}
             className="relative w-full h-full cursor-grab active:cursor-grabbing"
           >
-            <PageRenderer
-              page={currentPageData}
-              index={currentPage}
-              menuBook={menuBook}
-            />
+            <motion.div
+              className="w-full h-full"
+              style={{
+                rotateY: dragTilt,
+                scale: dragScale,
+                transformStyle: "preserve-3d",
+              }}
+            >
+              <PageRenderer
+                page={currentPageData}
+                index={currentPage}
+                menuBook={menuBook}
+              />
+            </motion.div>
 
             {/* Dynamic page shading to enhance page-turn depth */}
             <motion.div
@@ -185,6 +201,22 @@ export default function BookViewer({
                   flipDirection === "forward"
                     ? "linear-gradient(90deg, rgba(0,0,0,0.18), transparent 45%)"
                     : "linear-gradient(270deg, rgba(0,0,0,0.18), transparent 45%)",
+              }}
+            />
+
+            {/* Live drag edge shading to make swipe feel like physical page torque */}
+            <motion.div
+              className="absolute inset-y-0 left-0 w-24 pointer-events-none"
+              style={{
+                opacity: leftEdgeShade,
+                background: "linear-gradient(90deg, rgba(0,0,0,0.25), transparent)",
+              }}
+            />
+            <motion.div
+              className="absolute inset-y-0 right-0 w-24 pointer-events-none"
+              style={{
+                opacity: rightEdgeShade,
+                background: "linear-gradient(270deg, rgba(0,0,0,0.25), transparent)",
               }}
             />
           </motion.div>
