@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { MenuBook, MenuPage } from "@/types/menu";
 import { usePageFlip } from "@/hooks/usePageFlip";
 import CoverPage from "./CoverPage";
@@ -9,7 +9,35 @@ import { motion, AnimatePresence } from "framer-motion";
 interface BookViewerProps {
   menuBook: MenuBook;
   onEditRequest?: (pageId: string) => void;
+  fullScreen?: boolean;
+  initialPage?: number;
+  showHint?: boolean;
+  showIndicators?: boolean;
 }
+
+const pageTurnVariants = {
+  initial: (direction: "forward" | "backward") => ({
+    opacity: 0.9,
+    rotateY: direction === "forward" ? 95 : -95,
+    scale: 0.985,
+    transformOrigin: direction === "forward" ? "right center" : "left center",
+    filter: "brightness(0.86)",
+  }),
+  animate: {
+    opacity: 1,
+    rotateY: 0,
+    scale: 1,
+    transformOrigin: "center center",
+    filter: "brightness(1)",
+  },
+  exit: (direction: "forward" | "backward") => ({
+    opacity: 0.9,
+    rotateY: direction === "forward" ? -95 : 95,
+    scale: 0.985,
+    transformOrigin: direction === "forward" ? "left center" : "right center",
+    filter: "brightness(0.86)",
+  }),
+};
 
 function PageRenderer({
   page,
@@ -51,7 +79,13 @@ function PageRenderer({
   );
 }
 
-export default function BookViewer({ menuBook, onEditRequest }: BookViewerProps) {
+export default function BookViewer({
+  menuBook,
+  fullScreen = false,
+  initialPage = 0,
+  showHint = true,
+  showIndicators = true,
+}: BookViewerProps) {
   const pages = menuBook.pages;
   const {
     currentPage,
@@ -62,7 +96,7 @@ export default function BookViewer({ menuBook, onEditRequest }: BookViewerProps)
     goToPage,
     isFirst,
     isLast,
-  } = usePageFlip(pages.length);
+  } = usePageFlip(pages.length, initialPage);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -92,17 +126,20 @@ export default function BookViewer({ menuBook, onEditRequest }: BookViewerProps)
   };
 
   // Dimensions for the single page
-  const PAGE_W = 400;
-  const PAGE_H = 600;
+  const pageMaxWidth = fullScreen ? "min(100vw, calc(100vh * 2 / 3))" : "400px";
+  const containerClasses = fullScreen
+    ? "flex flex-col items-center justify-center w-full min-h-screen select-none p-0"
+    : "flex flex-col items-center justify-center w-full min-h-[80vh] select-none p-4";
 
   return (
-    <div className="flex flex-col items-center justify-center w-full min-h-[80vh] select-none p-4">
+    <div className={containerClasses}>
       {/* Page Container */}
       <div
         className="relative shadow-2xl rounded-lg bg-[var(--bg-primary)] touch-none overflow-hidden"
         style={{ 
+          perspective: 2200,
           width: "100%", 
-          maxWidth: PAGE_W, 
+          maxWidth: pageMaxWidth,
           height: "auto", 
           aspectRatio: "2/3",
           border: "1px solid rgba(212,175,106,0.1)"
@@ -112,48 +149,49 @@ export default function BookViewer({ menuBook, onEditRequest }: BookViewerProps)
           <motion.div
             key={currentPage}
             custom={flipDirection}
+            variants={pageTurnVariants}
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
+            dragMomentum={false}
             onDragEnd={handleDragEnd}
-            initial={{ 
-              opacity: 0, 
-              rotateY: flipDirection === "forward" ? 90 : -90,
-              x: flipDirection === "forward" ? 100 : -100,
-              scale: 0.95
-            }}
-            animate={{ 
-              opacity: 1, 
-              rotateY: 0,
-              x: 0,
-              scale: 1
-            }}
-            exit={{ 
-              opacity: 0, 
-              rotateY: flipDirection === "forward" ? -90 : 90,
-              x: flipDirection === "forward" ? -100 : 100,
-              scale: 0.95
-            }}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             transition={{ 
-              type: "spring", 
-              stiffness: 260, 
-              damping: 20,
-              mass: 1
+              duration: 0.55,
+              ease: [0.2, 0.85, 0.2, 1],
             }}
             style={{ 
-              perspective: 1200,
               transformStyle: "preserve-3d",
-              originX: flipDirection === "forward" ? 0 : 1
             }}
-            className="w-full h-full cursor-grab active:cursor-grabbing origin-center"
+            className="relative w-full h-full cursor-grab active:cursor-grabbing"
           >
             <PageRenderer
               page={currentPageData}
               index={currentPage}
               menuBook={menuBook}
             />
+
+            {/* Dynamic page shading to enhance page-turn depth */}
+            <motion.div
+              className="absolute inset-0 pointer-events-none"
+              initial={{ opacity: 0.22 }}
+              animate={{ opacity: 0 }}
+              exit={{ opacity: 0.22 }}
+              transition={{ duration: 0.4 }}
+              style={{
+                background:
+                  flipDirection === "forward"
+                    ? "linear-gradient(90deg, rgba(0,0,0,0.18), transparent 45%)"
+                    : "linear-gradient(270deg, rgba(0,0,0,0.18), transparent 45%)",
+              }}
+            />
           </motion.div>
         </AnimatePresence>
+
+        {/* Spine shadow for a stronger book feel */}
+        <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-black/10 to-transparent" />
 
         {/* Swipe Feedback Hints (Subtle) */}
         {!isFirst && (
@@ -164,34 +202,36 @@ export default function BookViewer({ menuBook, onEditRequest }: BookViewerProps)
         )}
       </div>
 
-      {/* Page indicator dots */}
-      <div className="flex gap-2 mt-8">
-        {pages.map((_, idx) => (
-          <button
-            key={idx}
-            onClick={() => goToPage(idx)}
-            className="transition-all duration-300"
-            style={{
-              width: idx === currentPage ? 24 : 8,
-              height: 8,
-              borderRadius: 4,
-              background:
-                idx === currentPage
-                  ? "var(--accent-forest)"
-                  : "var(--accent-olive)",
-              opacity: idx === currentPage ? 1 : 0.3,
-              border: "none",
-              cursor: "pointer",
-            }}
-            aria-label={`Go to page ${idx + 1}`}
-          />
-        ))}
-      </div>
+      {showIndicators && (
+        <div className="flex gap-2 mt-8">
+          {pages.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => goToPage(idx)}
+              className="transition-all duration-300"
+              style={{
+                width: idx === currentPage ? 24 : 8,
+                height: 8,
+                borderRadius: 4,
+                background:
+                  idx === currentPage
+                    ? "var(--accent-forest)"
+                    : "var(--accent-olive)",
+                opacity: idx === currentPage ? 1 : 0.3,
+                border: "none",
+                cursor: "pointer",
+              }}
+              aria-label={`Go to page ${idx + 1}`}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Navigation hint */}
-      <p className="font-body text-[10px] mt-6 text-[var(--text-muted)] tracking-[0.2em] uppercase opacity-60">
-        Swipe left or right to turn page
-      </p>
+      {showHint && (
+        <p className="font-body text-[10px] mt-6 text-[var(--text-muted)] tracking-[0.2em] uppercase opacity-60">
+          Swipe left or right to turn page
+        </p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 import { MenuPage, PageElement, MenuItem } from "@/types/menu";
-import { useMemo } from "react";
 
 interface FlexiblePageProps {
   page: MenuPage;
@@ -14,17 +13,28 @@ export default function FlexiblePage({
   inventory,
   pageNumber,
 }: FlexiblePageProps) {
+  const isPdfUrl = (url?: string) =>
+    typeof url === "string" && url.toLowerCase().endsWith(".pdf");
   
   const renderElement = (el: PageElement) => {
     const { x, y, width, height, rotation = 0, scale = 1, zIndex = 1 } = el.position;
+    const isFullBleedBackground =
+      el.type === "image" &&
+      /^bg-\d+$/i.test(el.id) &&
+      x === 0 &&
+      y === 0 &&
+      width === 100 &&
+      height === 100;
     
     const style: React.CSSProperties = {
       position: "absolute",
-      left: `${x}%`,
-      top: `${y}%`,
-      width: width ? `${width}%` : "auto",
-      height: height ? `${height}%` : "auto",
-      transform: `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`,
+      left: isFullBleedBackground ? 0 : `${x}%`,
+      top: isFullBleedBackground ? 0 : `${y}%`,
+      width: isFullBleedBackground ? "100%" : width ? `${width}%` : "auto",
+      height: isFullBleedBackground ? "100%" : height ? `${height}%` : "auto",
+      transform: isFullBleedBackground
+        ? `rotate(${rotation}deg) scale(${scale})`
+        : `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`,
       zIndex,
       transition: "all 0.3s ease",
     };
@@ -74,6 +84,20 @@ export default function FlexiblePage({
         );
 
       case "image":
+        if (isPdfUrl(el.imageUrl)) {
+          const imageClassName = isFullBleedBackground
+            ? "overflow-hidden bg-white pointer-events-none"
+            : "rounded-2xl overflow-hidden shadow-lg border-2 border-white/30 bg-white";
+          return (
+            <div key={el.id} style={style} className={imageClassName}>
+              <iframe
+                src={`${el.imageUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                title="PDF page"
+                className="w-full h-full pointer-events-none"
+              />
+            </div>
+          );
+        }
         return (
           <div key={el.id} style={style} className="rounded-2xl overflow-hidden shadow-lg border-2 border-white/30">
             <img src={el.imageUrl} alt="element" className="w-full h-full object-cover" />
@@ -84,6 +108,17 @@ export default function FlexiblePage({
         return null;
     }
   };
+
+  const isBackgroundElement = (el: PageElement) =>
+    el.type === "image" &&
+    /^bg-\d+$/i.test(el.id) &&
+    el.position.x === 0 &&
+    el.position.y === 0 &&
+    el.position.width === 100 &&
+    el.position.height === 100;
+
+  const backgroundElements = page.elements.filter(isBackgroundElement);
+  const contentElements = page.elements.filter((el) => !isBackgroundElement(el));
 
   return (
     <div
@@ -102,9 +137,14 @@ export default function FlexiblePage({
       <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full opacity-10 bg-[radial-gradient(circle,var(--accent-olive),transparent)] pointer-events-none" />
       <div className="absolute -bottom-10 -left-10 w-64 h-64 rounded-full opacity-5 bg-[radial-gradient(circle,var(--accent-forest),transparent)] pointer-events-none" />
 
-      {/* Render elements */}
+      {/* Render background layer */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        {backgroundElements.map(renderElement)}
+      </div>
+
+      {/* Render foreground/content layer */}
       <div className="absolute inset-0 z-10 p-8">
-        {page.elements.map(renderElement)}
+        {contentElements.map(renderElement)}
       </div>
 
       {/* Page number */}

@@ -14,7 +14,7 @@ export const DEFAULT_MENU: MenuBook = {
         id: `bg-${i + 1}`,
         type: "image",
         position: { x: 0, y: 0, width: 100, height: 100, zIndex: 0 },
-        imageUrl: `/pages/page-${i + 1}.png`,
+        imageUrl: `/splited/Summer202026-${i + 1}.pdf`,
       },
     ],
   })),

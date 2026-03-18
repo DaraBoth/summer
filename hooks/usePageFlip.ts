@@ -1,44 +1,68 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
-export function usePageFlip(totalPages: number) {
-  const [currentPage, setCurrentPage] = useState(0);
+const FLIP_DURATION_MS = 550;
+
+export function usePageFlip(totalPages: number, initialPage = 0) {
+  const getClampedPage = useCallback(
+    (page: number) => Math.max(0, Math.min(page, Math.max(totalPages - 1, 0))),
+    [totalPages]
+  );
+  const [currentPage, setCurrentPage] = useState(() => getClampedPage(initialPage));
   const [isAnimating, setIsAnimating] = useState(false);
   const [flipDirection, setFlipDirection] = useState<"forward" | "backward">(
     "forward"
   );
+  const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startAnimationLock = useCallback(() => {
+    setIsAnimating(true);
+    if (animationTimerRef.current) {
+      clearTimeout(animationTimerRef.current);
+    }
+    animationTimerRef.current = setTimeout(() => {
+      setIsAnimating(false);
+    }, FLIP_DURATION_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimerRef.current) {
+        clearTimeout(animationTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage((prev) => getClampedPage(prev));
+  }, [getClampedPage]);
+
+  useEffect(() => {
+    setCurrentPage(getClampedPage(initialPage));
+  }, [initialPage, getClampedPage]);
 
   const goForward = useCallback(() => {
     if (isAnimating || currentPage >= totalPages - 1) return;
     setFlipDirection("forward");
-    setIsAnimating(true);
-    setTimeout(() => {
-      setCurrentPage((p) => p + 1);
-      setIsAnimating(false);
-    }, 400); // Faster transition for modern feel
-  }, [isAnimating, currentPage, totalPages]);
+    setCurrentPage((p) => p + 1);
+    startAnimationLock();
+  }, [isAnimating, currentPage, totalPages, startAnimationLock]);
 
   const goBackward = useCallback(() => {
     if (isAnimating || currentPage <= 0) return;
     setFlipDirection("backward");
-    setIsAnimating(true);
-    setTimeout(() => {
-      setCurrentPage((p) => p - 1);
-      setIsAnimating(false);
-    }, 400);
-  }, [isAnimating, currentPage]);
+    setCurrentPage((p) => p - 1);
+    startAnimationLock();
+  }, [isAnimating, currentPage, startAnimationLock]);
 
   const goToPage = useCallback(
     (page: number) => {
-      if (isAnimating || page === currentPage) return;
+      if (isAnimating || page === currentPage || page < 0 || page >= totalPages) return;
       setFlipDirection(page > currentPage ? "forward" : "backward");
-      setIsAnimating(true);
-      setTimeout(() => {
-        setCurrentPage(page);
-        setIsAnimating(false);
-      }, 400);
+      setCurrentPage(page);
+      startAnimationLock();
     },
-    [isAnimating, currentPage]
+    [isAnimating, currentPage, totalPages, startAnimationLock]
   );
 
   return {

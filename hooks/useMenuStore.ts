@@ -6,6 +6,31 @@ import { v4 as uuidv4 } from "uuid";
 
 const STORAGE_KEY = "food-menu-v2"; // Increment version for new schema
 
+function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
+  return {
+    ...book,
+    pages: (book.pages || []).map((page, pageIndex) => ({
+      ...page,
+      elements: (page.elements || []).map((el) => {
+        const oldUrl = el.imageUrl || "";
+        const isLegacyBackground =
+          el.type === "image" &&
+          /^bg-\d+$/.test(el.id) &&
+          /^\/pages\/page-\d+\.png$/i.test(oldUrl);
+
+        if (!isLegacyBackground) {
+          return el;
+        }
+
+        return {
+          ...el,
+          imageUrl: `/splited/Summer202026-${pageIndex + 1}.pdf`,
+        };
+      }),
+    })),
+  };
+}
+
 export function useMenuStore() {
   const [menuBook, setMenuBook] = useState<MenuBook>(DEFAULT_MENU);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -14,7 +39,8 @@ export function useMenuStore() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        setMenuBook(JSON.parse(saved));
+        const parsed = JSON.parse(saved) as MenuBook;
+        setMenuBook(migrateLegacyPageBackgrounds(parsed));
       }
     } catch (e) {
       console.error("Failed to load menu", e);
