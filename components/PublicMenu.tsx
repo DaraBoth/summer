@@ -1,6 +1,6 @@
 "use client";
 
-import BookViewer from "@/components/BookViewer";
+import VerticalMenuScroll from "@/components/VerticalMenuScroll";
 import { useMenuStore } from "@/hooks/useMenuStore";
 
 interface PublicMenuProps {
@@ -26,7 +26,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
   }
 
   return (
-    <main className="relative min-h-screen bg-[var(--bg-secondary)] overflow-hidden">
+    <main className="relative min-h-screen bg-[var(--bg-secondary)] overflow-x-hidden">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -34,13 +34,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
             "radial-gradient(ellipse at 50% 20%, rgba(255,220,176,0.85), rgba(245,202,147,0.55) 45%, rgba(230,183,128,0.45) 65%, rgba(246,232,213,1) 100%)",
         }}
       />
-      <BookViewer
-        menuBook={menuBook}
-        fullScreen
-        showIndicators={false}
-        showHint={false}
-        initialPage={initialPage}
-      />
+      <VerticalMenuScroll menuBook={menuBook} initialPage={initialPage} />
     </main>
   );
 }
