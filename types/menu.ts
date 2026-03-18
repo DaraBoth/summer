@@ -49,6 +49,7 @@ export interface MenuPage {
   titleKh?: string;
   subtitle?: string;
   elements: PageElement[];
+  items?: MenuItem[]; // Legacy support for ItemsPage
   backgroundColor?: string;
   backgroundImage?: string;
 }
