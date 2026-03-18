@@ -4,7 +4,13 @@ import { MenuBook, MenuPage } from "@/types/menu";
 import { usePageFlip } from "@/hooks/usePageFlip";
 import CoverPage from "./CoverPage";
 import FlexiblePage from "./FlexiblePage";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useTransform,
+  useSpring,
+} from "framer-motion";
 
 interface BookViewerProps {
   menuBook: MenuBook;
@@ -17,11 +23,11 @@ interface BookViewerProps {
 
 const pageTurnVariants = {
   initial: (direction: "forward" | "backward") => ({
-    opacity: 0.9,
-    rotateY: direction === "forward" ? 95 : -95,
-    scale: 0.985,
+    opacity: 0.96,
+    rotateY: direction === "forward" ? 78 : -78,
+    scale: 0.994,
     transformOrigin: direction === "forward" ? "right center" : "left center",
-    filter: "brightness(0.86)",
+    filter: "brightness(0.9)",
   }),
   animate: {
     opacity: 1,
@@ -31,11 +37,11 @@ const pageTurnVariants = {
     filter: "brightness(1)",
   },
   exit: (direction: "forward" | "backward") => ({
-    opacity: 0.9,
-    rotateY: direction === "forward" ? -95 : 95,
-    scale: 0.985,
+    opacity: 0.96,
+    rotateY: direction === "forward" ? -78 : 78,
+    scale: 0.994,
     transformOrigin: direction === "forward" ? "left center" : "right center",
-    filter: "brightness(0.86)",
+    filter: "brightness(0.9)",
   }),
 };
 
@@ -98,10 +104,21 @@ export default function BookViewer({
     isLast,
   } = usePageFlip(pages.length, initialPage);
   const dragX = useMotionValue(0);
-  const dragTilt = useTransform(dragX, [-180, 0, 180], [10, 0, -10]);
-  const dragScale = useTransform(dragX, [-180, 0, 180], [0.992, 1, 0.992]);
-  const leftEdgeShade = useTransform(dragX, [0, 180], [0, 0.24]);
-  const rightEdgeShade = useTransform(dragX, [-180, 0], [0.24, 0]);
+  const smoothDragX = useSpring(dragX, {
+    stiffness: 280,
+    damping: 36,
+    mass: 0.28,
+  });
+  const dragTilt = useTransform(smoothDragX, [-220, 0, 220], [11, 0, -11]);
+  const dragRotateZ = useTransform(smoothDragX, [-220, 0, 220], [1, 0, -1]);
+  const dragScale = useTransform(smoothDragX, [-220, 0, 220], [0.989, 1, 0.989]);
+  const leftEdgeShade = useTransform(smoothDragX, [0, 220], [0, 0.25]);
+  const rightEdgeShade = useTransform(smoothDragX, [-220, 0], [0.25, 0]);
+  const centerGloss = useTransform(
+    smoothDragX,
+    [-220, -60, 0, 60, 220],
+    [0.2, 0.08, 0, 0.08, 0.2]
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -120,7 +137,7 @@ export default function BookViewer({
 
   // Swipe gesture handler
   const handleDragEnd = (event: any, info: any) => {
-    const swipeThreshold = fullScreen ? 70 : 50;
+    const swipeThreshold = fullScreen ? 80 : 55;
     const velocityThreshold = 500;
     
     if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
@@ -145,11 +162,14 @@ export default function BookViewer({
         className="relative shadow-2xl rounded-lg bg-[var(--bg-primary)] touch-none overflow-hidden"
         style={{ 
           perspective: 2200,
+          background: fullScreen ? "#111820" : "var(--bg-primary)",
           width: "100%", 
           maxWidth: pageMaxWidth,
           height: "auto", 
           aspectRatio: "2/3",
-          border: "1px solid rgba(212,175,106,0.1)"
+          border: fullScreen
+            ? "1px solid rgba(255,255,255,0.08)"
+            : "1px solid rgba(212,175,106,0.1)",
         }}
       >
         <AnimatePresence mode="wait" custom={flipDirection}>
@@ -159,18 +179,18 @@ export default function BookViewer({
             variants={pageTurnVariants}
             drag={isAnimating ? false : "x"}
             dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.2}
+            dragElastic={0.12}
             dragMomentum={false}
             dragTransition={{ bounceStiffness: 320, bounceDamping: 24 }}
-            whileDrag={{ cursor: "grabbing" }}
+            whileDrag={{ cursor: "grabbing", scale: 1.002 }}
             style={{ x: dragX }}
             onDragEnd={handleDragEnd}
             initial="initial"
             animate="animate"
             exit="exit"
             transition={{ 
-              duration: 0.55,
-              ease: [0.2, 0.85, 0.2, 1],
+              duration: 0.68,
+              ease: [0.16, 1, 0.3, 1],
             }}
             className="relative w-full h-full cursor-grab active:cursor-grabbing"
           >
@@ -178,6 +198,7 @@ export default function BookViewer({
               className="w-full h-full"
               style={{
                 rotateY: dragTilt,
+                rotateZ: dragRotateZ,
                 scale: dragScale,
                 transformStyle: "preserve-3d",
               }}
@@ -217,6 +238,14 @@ export default function BookViewer({
               style={{
                 opacity: rightEdgeShade,
                 background: "linear-gradient(270deg, rgba(0,0,0,0.25), transparent)",
+              }}
+            />
+            <motion.div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                opacity: centerGloss,
+                background:
+                  "linear-gradient(90deg, transparent 44%, rgba(255,255,255,0.22) 50%, transparent 56%)",
               }}
             />
           </motion.div>
