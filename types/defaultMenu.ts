@@ -6,7 +6,7 @@ export const DEFAULT_MENU: MenuBook = {
   tagline: "Quality Experience & Professional Service",
   pages: Array.from({ length: 12 }, (_, i) => ({
     id: `page-${i + 1}`,
-    type: i === 0 ? "cover" : i === 11 ? "back-cover" : "content",
+    type: i === 0 ? "cover" : i === 12 ? "back-cover" : "content",
     title: `Section ${i + 1}`,
     backgroundColor: "#ffffff",
     elements: [
