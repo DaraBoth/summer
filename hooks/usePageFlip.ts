@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useRef, useEffect } from "react";
 
-const FLIP_DURATION_MS = 550;
+const FLIP_DURATION_MS = 220;
 
 export function usePageFlip(totalPages: number, initialPage = 0) {
   const getClampedPage = useCallback(
