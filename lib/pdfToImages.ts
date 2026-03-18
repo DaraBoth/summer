@@ -14,7 +14,7 @@ export async function convertPdfFileToImages(
   const pdfjs = await import("pdfjs-dist");
 
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
   }
 
   const fileBytes = await file.arrayBuffer();
