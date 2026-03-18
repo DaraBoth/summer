@@ -16,7 +16,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
             {menuBook.restaurantName || "Le Jardin d'Or"}
-          </div>
+          </div> 
           <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--accent-forest)] opacity-50">
             Opening your menu...
           </p>
