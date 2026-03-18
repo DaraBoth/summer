@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { MenuBook, MenuItem, MenuPage, PageElement } from "@/types/menu";
-import { defaultMenuBook } from "@/types/defaultMenu";
+import { DEFAULT_MENU } from "@/types/defaultMenu";
 import { v4 as uuidv4 } from "uuid";
 
 const STORAGE_KEY = "food-menu-v2"; // Increment version for new schema
 
 export function useMenuStore() {
-  const [menuBook, setMenuBook] = useState<MenuBook>(defaultMenuBook);
+  const [menuBook, setMenuBook] = useState<MenuBook>(DEFAULT_MENU);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export function useMenuStore() {
   );
 
   const resetToDefault = useCallback(() => {
-    save(defaultMenuBook);
+    save(DEFAULT_MENU);
   }, [save]);
 
   return {
