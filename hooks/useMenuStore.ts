@@ -14,27 +14,39 @@ const menuStorage = localforage.createInstance({
 });
 
 function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
+  const migratedPages = (book.pages || []).map((page, pageIndex) => ({
+    ...page,
+    elements: (page.elements || []).map((el) => {
+      const oldUrl = el.imageUrl || "";
+      const isLegacyBackground =
+        el.type === "image" &&
+        /^bg-\d+(?:-\d+)?$/i.test(el.id) &&
+        (/^\/pages\/page-\d+\.png$/i.test(oldUrl) ||
+          /^\/splited\/Summer202026-\d+\.pdf$/i.test(oldUrl) ||
+          /^\/menu\/menu-\d+\.png$/i.test(oldUrl));
+
+      if (!isLegacyBackground) {
+        return el;
+      }
+
+      return {
+        ...el,
+        imageUrl: `/menu/menu-${pageIndex + 1}.png`,
+      };
+    }),
+  }));
+
+  const missingDefaultPages =
+    migratedPages.length < DEFAULT_MENU.pages.length
+      ? DEFAULT_MENU.pages.slice(migratedPages.length).map((page) => ({
+          ...page,
+          elements: page.elements.map((el) => ({ ...el })),
+        }))
+      : [];
+
   return {
     ...book,
-    pages: (book.pages || []).map((page, pageIndex) => ({
-      ...page,
-      elements: (page.elements || []).map((el) => {
-        const oldUrl = el.imageUrl || "";
-        const isLegacyBackground =
-          el.type === "image" &&
-          /^bg-\d+$/.test(el.id) &&
-          /^\/pages\/page-\d+\.png$/i.test(oldUrl);
-
-        if (!isLegacyBackground) {
-          return el;
-        }
-
-        return {
-          ...el,
-          imageUrl: `/splited/Summer202026-${pageIndex + 1}.pdf`,
-        };
-      }),
-    })),
+    pages: [...migratedPages, ...missingDefaultPages],
   };
 }
 

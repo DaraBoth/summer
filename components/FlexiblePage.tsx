@@ -36,7 +36,7 @@ export default function FlexiblePage({
     if (!url) return null;
     const match = url.match(/^\/splited\/Summer202026-(\d+)\.pdf$/i);
     if (!match) return null;
-    return `/pages/page-${match[1]}.png`;
+    return `/menu/menu-${match[1]}.png`;
   };
   
   const renderElement = (el: PageElement) => {

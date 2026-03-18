@@ -4,9 +4,9 @@ export const DEFAULT_MENU: MenuBook = {
   restaurantName: "Summer Menu",
   restaurantNameKh: "ម៉ឺនុយរដូវក្តៅ",
   tagline: "Quality Experience & Professional Service",
-  pages: Array.from({ length: 11 }, (_, i) => ({
+  pages: Array.from({ length: 12 }, (_, i) => ({
     id: `page-${i + 1}`,
-    type: i === 0 ? "cover" : i === 10 ? "back-cover" : "content",
+    type: i === 0 ? "cover" : i === 11 ? "back-cover" : "content",
     title: `Section ${i + 1}`,
     backgroundColor: "#ffffff",
     elements: [
@@ -14,7 +14,7 @@ export const DEFAULT_MENU: MenuBook = {
         id: `bg-${i + 1}`,
         type: "image",
         position: { x: 0, y: 0, width: 100, height: 100, zIndex: 0 },
-        imageUrl: `/splited/Summer202026-${i + 1}.pdf`,
+        imageUrl: `/menu/menu-${i + 1}.png`,
       },
     ],
   })),
