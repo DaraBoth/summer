@@ -60,6 +60,11 @@ export interface MenuBook {
   tagline?: string;
   pages: MenuPage[];
   inventory: MenuItem[]; // Global list of food items
+  sourcePdf?: {
+    name: string;
+    importedAt: string;
+    pageCount: number;
+  };
 }
 
 export type AnimationDirection = "forward" | "backward" | "none";

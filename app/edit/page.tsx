@@ -72,6 +72,12 @@ export default function EditPage() {
 
         <div className="flex items-center gap-3">
           <a
+            href="/upload"
+            className="px-4 py-2 rounded-full bg-white border border-[var(--accent-forest)]/30 text-[var(--accent-forest)] font-body text-[10px] font-bold uppercase tracking-widest"
+          >
+            Upload PDF
+          </a>
+          <a
             href="/"
             target="_blank"
             rel="noreferrer"

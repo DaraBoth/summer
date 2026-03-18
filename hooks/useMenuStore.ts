@@ -3,8 +3,15 @@ import { useState, useEffect, useCallback } from "react";
 import { MenuBook, MenuItem, MenuPage, PageElement } from "@/types/menu";
 import { DEFAULT_MENU } from "@/types/defaultMenu";
 import { v4 as uuidv4 } from "uuid";
+import localforage from "localforage";
 
-const STORAGE_KEY = "food-menu-v2"; // Increment version for new schema
+const STORAGE_KEY = "food-menu-v3"; // Increment version for new schema
+const LEGACY_STORAGE_KEY = "food-menu-v2";
+
+const menuStorage = localforage.createInstance({
+  name: "summer-menu-storage",
+  storeName: "menu_book",
+});
 
 function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
   return {
@@ -36,26 +43,68 @@ export function useMenuStore() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as MenuBook;
-        setMenuBook(migrateLegacyPageBackgrounds(parsed));
+    const loadStoredBook = async () => {
+      try {
+        const saved = await menuStorage.getItem<MenuBook>(STORAGE_KEY);
+        if (saved) {
+          setMenuBook(migrateLegacyPageBackgrounds(saved));
+          return;
+        }
+
+        const legacySaved = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacySaved) {
+          const parsed = JSON.parse(legacySaved) as MenuBook;
+          const migrated = migrateLegacyPageBackgrounds(parsed);
+          setMenuBook(migrated);
+          await menuStorage.setItem(STORAGE_KEY, migrated);
+        }
+      } catch (e) {
+        console.error("Failed to load menu", e);
+      } finally {
+        setIsLoaded(true);
       }
-    } catch (e) {
-      console.error("Failed to load menu", e);
-    }
-    setIsLoaded(true);
+    };
+
+    void loadStoredBook();
   }, []);
 
   const save = useCallback((book: MenuBook) => {
     setMenuBook(book);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
-    } catch (e) {
+    void menuStorage.setItem(STORAGE_KEY, book).catch((e) => {
       console.error("Failed to save menu", e);
-    }
+    });
   }, []);
+
+  const importPdfPagesAsMenu = useCallback(
+    (imageDataUrls: string[], sourcePdfName: string) => {
+      const timestamp = Date.now();
+      const pages: MenuPage[] = imageDataUrls.map((imageUrl, index) => ({
+        id: `pdf-page-${timestamp}-${index + 1}`,
+        type: "content",
+        title: `Page ${index + 1}`,
+        titleKh: "",
+        elements: [
+          {
+            id: `bg-${timestamp}-${index + 1}`,
+            type: "image",
+            position: { x: 0, y: 0, width: 100, height: 100, zIndex: 0 },
+            imageUrl,
+          },
+        ],
+      }));
+
+      save({
+        ...menuBook,
+        pages,
+        sourcePdf: {
+          name: sourcePdfName,
+          importedAt: new Date().toISOString(),
+          pageCount: imageDataUrls.length,
+        },
+      });
+    },
+    [menuBook, save]
+  );
 
   // --- RESTAURANT INFO ---
   const updateRestaurantInfo = useCallback(
@@ -221,5 +270,6 @@ export function useMenuStore() {
     deletePage,
     reorderPages,
     resetToDefault,
+    importPdfPagesAsMenu,
   };
 }
