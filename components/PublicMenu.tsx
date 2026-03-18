@@ -12,7 +12,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f6e8d5]">
+      <div className="min-h-screen flex items-center justify-center bg-[#050505]">
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
             {menuBook.restaurantName || "Le Jardin d'Or"}
@@ -31,7 +31,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 20%, rgba(255,220,176,0.85), rgba(245,202,147,0.55) 45%, rgba(230,183,128,0.45) 65%, rgba(246,232,213,1) 100%)",
+            "radial-gradient(ellipse at 50% 28%, rgba(255,183,82,0.28), rgba(184,113,42,0.18) 36%, rgba(55,34,17,0.4) 58%, rgba(5,5,5,1) 82%)",
         }}
       />
       <VerticalMenuScroll menuBook={menuBook} initialPage={initialPage} />

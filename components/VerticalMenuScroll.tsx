@@ -58,7 +58,7 @@ export default function VerticalMenuScroll({ menuBook, initialPage }: VerticalMe
             ref={(el) => {
               pageRefs.current[index] = el;
             }}
-            className="rounded-xl border border-[var(--border-light)] bg-[var(--paper-white)]/85 shadow-[0_8px_26px_rgba(99,62,32,0.14)] overflow-hidden"
+            className="rounded-xl border border-[var(--border-light)] bg-black/80 shadow-[0_12px_32px_rgba(0,0,0,0.55)] overflow-hidden"
           >
             {page.imageUrl ? (
               <img

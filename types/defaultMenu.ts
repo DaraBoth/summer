@@ -2,7 +2,7 @@ import { MenuBook, MenuPage } from "./menu";
 
 export const DEFAULT_MENU: MenuBook = {
   restaurantName: "Summer Menu",
-  restaurantNameKh: "ម៉ឺនុយរដូវក្តៅ",
+  restaurantNameKh: "ម៉ឺនុយSummer",
   tagline: "Quality Experience & Professional Service",
   pages: Array.from({ length: 12 }, (_, i) => ({
     id: `page-${i + 1}`,
