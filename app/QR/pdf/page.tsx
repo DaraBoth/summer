@@ -2,100 +2,52 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { useMenuStore } from "@/hooks/useMenuStore";
 
 type SharePlatform = "facebook" | "x" | "telegram" | "whatsapp";
 
-interface PublicFileEntry {
-  name: string;
-  path: string;
-}
-
-export default function QRPage() {
-  const { menuBook } = useMenuStore();
+export default function PdfQrPage() {
   const [origin, setOrigin] = useState("");
-  const [selectedPath, setSelectedPath] = useState("/");
-  const [publicFiles, setPublicFiles] = useState<PublicFileEntry[]>([]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
-  useEffect(() => {
-    const loadPublicFiles = async () => {
-      try {
-        const response = await fetch("/api/public-files");
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as { files?: PublicFileEntry[] };
-        setPublicFiles(payload.files || []);
-      } catch {
-        setPublicFiles([]);
-      }
-    };
-
-    void loadPublicFiles();
-  }, []);
-
-  const detectedPaths = useMemo(() => {
-    const basePaths = [
-      { label: "Home Menu", path: "/" },
-      { label: "Menu PDF File", path: "/api/pdf" },
-      { label: "Swipe Menu", path: "/swipe" },
-      { label: "Edit (Protected)", path: "/edit" },
-    ];
-
-    const pageLinks = (menuBook.pages || []).map((_, index) => ({
-      label: `Menu Page ${index + 1}`,
-      path: `/?page=${index + 1}`,
-    }));
-
-    const publicFileLinks = publicFiles.map((file) => ({
-      label: `Public File: ${file.name}`,
-      path: file.path,
-    }));
-
-    return [...basePaths, ...pageLinks, ...publicFileLinks];
-  }, [menuBook.pages, publicFiles]);
-
-  const selectedUrl = useMemo(() => {
+  const pdfUrl = useMemo(() => {
     if (!origin) return "";
-    return `${origin}${selectedPath}`;
-  }, [origin, selectedPath]);
+    return `${origin}/api/pdf`;
+  }, [origin]);
 
   const downloadQrCode = () => {
-    const canvas = document.getElementById("menu-qr-canvas") as HTMLCanvasElement | null;
+    const canvas = document.getElementById("menu-pdf-qr-canvas") as HTMLCanvasElement | null;
     if (!canvas) return;
 
     const dataUrl = canvas.toDataURL("image/png");
     const link = document.createElement("a");
     link.href = dataUrl;
-    link.download = "menu-qr.png";
+    link.download = "menu-pdf-qr.png";
     link.click();
   };
 
   const shareQrTarget = async () => {
-    if (!selectedUrl) return;
+    if (!pdfUrl) return;
 
     if (navigator.share) {
       await navigator.share({
-        title: "Menu Link",
-        text: "Check our menu",
-        url: selectedUrl,
+        title: "Menu PDF",
+        text: "Open our menu PDF",
+        url: pdfUrl,
       });
       return;
     }
 
-    await navigator.clipboard.writeText(selectedUrl);
-    window.alert("Link copied to clipboard.");
+    await navigator.clipboard.writeText(pdfUrl);
+    window.alert("PDF link copied to clipboard.");
   };
 
   const shareToPlatform = (platform: SharePlatform) => {
-    if (!selectedUrl) return;
-    const encodedUrl = encodeURIComponent(selectedUrl);
-    const encodedText = encodeURIComponent("Check our menu");
+    if (!pdfUrl) return;
+    const encodedUrl = encodeURIComponent(pdfUrl);
+    const encodedText = encodeURIComponent("Open our menu PDF");
 
     const platformUrlMap: Record<SharePlatform, string> = {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
@@ -110,41 +62,17 @@ export default function QRPage() {
   return (
     <main className="min-h-screen bg-[var(--bg-secondary)] px-4 py-10">
       <div className="mx-auto max-w-3xl bg-white rounded-3xl shadow-xl border border-black/5 p-8">
-        <h1 className="font-menu-title text-3xl text-[var(--accent-dark)] mb-2">QR Generator</h1>
+        <h1 className="font-menu-title text-3xl text-[var(--accent-dark)] mb-2">Menu PDF QR</h1>
         <p className="font-body text-sm text-[var(--text-muted)] mb-8">
-          Select a detected page and generate a shareable QR code.
+          This route always generates a QR code for your menu PDF file.
         </p>
-
-        <div className="mb-6">
-          <a
-            href="/QR/pdf"
-            className="inline-flex rounded-full border border-[var(--accent-forest)]/30 text-[var(--accent-forest)] px-4 py-2 text-[10px] font-bold uppercase tracking-widest"
-          >
-            Open Dedicated Menu PDF QR Route
-          </a>
-        </div>
-
-        <label className="block text-[10px] tracking-[0.2em] uppercase font-bold text-[var(--accent-forest)] mb-2">
-          Select Page
-        </label>
-        <select
-          value={selectedPath}
-          onChange={(e) => setSelectedPath(e.target.value)}
-          className="w-full mb-6 rounded-xl border border-black/10 bg-[var(--bg-secondary)] px-4 py-3 text-sm"
-        >
-          {detectedPaths.map((item) => (
-            <option key={item.path} value={item.path}>
-              {item.label} - {item.path}
-            </option>
-          ))}
-        </select>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="rounded-2xl border border-black/10 bg-white p-6 flex justify-center">
-            {selectedUrl ? (
+            {pdfUrl ? (
               <QRCodeCanvas
-                id="menu-qr-canvas"
-                value={selectedUrl}
+                id="menu-pdf-qr-canvas"
+                value={pdfUrl}
                 size={280}
                 includeMargin
                 bgColor="#ffffff"
@@ -157,9 +85,9 @@ export default function QRPage() {
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent-forest)] font-bold mb-2">Target URL</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent-forest)] font-bold mb-2">PDF URL</p>
             <p className="text-sm break-all bg-[var(--bg-secondary)] border border-black/5 rounded-xl p-3 mb-6">
-              {selectedUrl || "Loading..."}
+              {pdfUrl || "Loading..."}
             </p>
 
             <div className="space-y-3">
