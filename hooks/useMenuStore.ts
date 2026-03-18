@@ -36,9 +36,27 @@ function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
     }),
   }));
 
+  const normalizedPages = migratedPages.map((page) => {
+    const hasMenuBackgroundImage = (page.elements || []).some(
+      (el) =>
+        el.type === "image" &&
+        /^bg-\d+(?:-\d+)?$/i.test(el.id) &&
+        /^\/menu\/menu-\d+\.png$/i.test(el.imageUrl || "")
+    );
+
+    if (!hasMenuBackgroundImage) {
+      return page;
+    }
+
+    return {
+      ...page,
+      type: "content" as const,
+    };
+  });
+
   const missingDefaultPages =
-    migratedPages.length < DEFAULT_MENU.pages.length
-      ? DEFAULT_MENU.pages.slice(migratedPages.length).map((page) => ({
+    normalizedPages.length < DEFAULT_MENU.pages.length
+      ? DEFAULT_MENU.pages.slice(normalizedPages.length).map((page) => ({
           ...page,
           elements: page.elements.map((el) => ({ ...el })),
         }))
@@ -46,7 +64,7 @@ function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
 
   return {
     ...book,
-    pages: [...migratedPages, ...missingDefaultPages],
+    pages: [...normalizedPages, ...missingDefaultPages],
   };
 }
 

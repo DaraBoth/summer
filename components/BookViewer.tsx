@@ -211,7 +211,6 @@ export default function BookViewer({
         }}
       >
         <div className="absolute inset-0 pointer-events-none bg-[#f3dfc4]" />
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-6 pointer-events-none bg-gradient-to-r from-transparent via-[#8c5c35]/25 to-transparent opacity-80" />
 
         <Swiper
           modules={[EffectCreative, Keyboard, A11y]}
@@ -251,8 +250,6 @@ export default function BookViewer({
             <SwiperSlide key={page.id}>
               <div className="w-full h-full relative">
                 <PageRenderer page={page} index={idx} menuBook={menuBook} />
-                <div className="absolute inset-y-0 left-0 w-16 pointer-events-none bg-gradient-to-r from-[#8c5c35]/14 to-transparent" />
-                <div className="absolute inset-y-0 right-0 w-16 pointer-events-none bg-gradient-to-l from-[#8c5c35]/14 to-transparent" />
               </div>
             </SwiperSlide>
           ))}
@@ -275,7 +272,7 @@ export default function BookViewer({
         )}
 
         {/* Spine shadow for a stronger book feel */}
-        {!isMobileFullScreen && (
+        {!isMobileFullScreen && !fullScreen && (
           <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-[#8c5c35]/20 to-transparent" />
         )}
 

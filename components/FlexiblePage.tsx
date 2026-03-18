@@ -167,23 +167,30 @@ export default function FlexiblePage({
 
   const backgroundElements = page.elements.filter(isBackgroundElement);
   const contentElements = page.elements.filter((el) => !isBackgroundElement(el));
+  const hasFullBleedBackgroundImage = backgroundElements.length > 0;
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden paper-texture shadow-INNER"
+      className={`relative w-full h-full overflow-hidden ${
+        hasFullBleedBackgroundImage ? "" : "paper-texture shadow-INNER"
+      }`}
       style={{ 
         background: page.backgroundColor || "var(--bg-primary)",
         aspectRatio: "3/4" 
       }}
     >
-      {/* Subtle paper grain */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none" 
-           style={{ backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, var(--accent-olive) 2px, var(--accent-olive) 3px)` }} 
-      />
+      {!hasFullBleedBackgroundImage && (
+        <>
+          {/* Subtle paper grain */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none" 
+               style={{ backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, var(--accent-olive) 2px, var(--accent-olive) 3px)` }} 
+          />
 
-      {/* watercolor-style bleed at corners */}
-      <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full opacity-10 bg-[radial-gradient(circle,var(--accent-olive),transparent)] pointer-events-none" />
-      <div className="absolute -bottom-10 -left-10 w-64 h-64 rounded-full opacity-5 bg-[radial-gradient(circle,var(--accent-forest),transparent)] pointer-events-none" />
+          {/* watercolor-style bleed at corners */}
+          <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full opacity-10 bg-[radial-gradient(circle,var(--accent-olive),transparent)] pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-64 h-64 rounded-full opacity-5 bg-[radial-gradient(circle,var(--accent-forest),transparent)] pointer-events-none" />
+        </>
+      )}
 
       {/* Render background layer */}
       <div className="absolute inset-0 z-0 pointer-events-none">
@@ -196,7 +203,7 @@ export default function FlexiblePage({
       </div>
 
       {/* Page number */}
-      <div className="absolute bottom-6 w-full text-center font-body text-[10px] text-[var(--text-muted)] tracking-[0.2em] opacity-30">
+      <div className="absolute bottom-3 w-full text-center font-body text-[10px] text-[var(--text-muted)] tracking-[0.2em] opacity-22">
         • {pageNumber} •
       </div>
     </div>
