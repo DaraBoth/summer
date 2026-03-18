@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { MenuBook, MenuItem, MenuPage, PageElement } from "@/types/menu";
 import DesignerCanvas from "./DesignerCanvas";
 
@@ -45,7 +45,7 @@ export default function EditPanel({
 
   // --- RENDERING HELPERS ---
 
-  const renderTabButton = (id: Tab, label: string, icon: JSX.Element) => (
+  const renderTabButton = (id: Tab, label: string, icon: ReactNode) => (
     <button
       onClick={() => setActiveTab(id)}
       className={`flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-all font-body text-[10px] font-bold uppercase tracking-widest ${
