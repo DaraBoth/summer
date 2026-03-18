@@ -17,6 +17,14 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/menu.pdf",
+        destination: "/api/pdf",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "swiper/css";
+import "swiper/css/effect-creative";
 
 export const metadata: Metadata = {
   title: "Food Menu Book",

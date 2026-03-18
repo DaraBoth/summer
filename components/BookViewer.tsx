@@ -1,16 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MenuBook, MenuPage } from "@/types/menu";
-import { usePageFlip } from "@/hooks/usePageFlip";
 import CoverPage from "./CoverPage";
 import FlexiblePage from "./FlexiblePage";
-import {
-  motion,
-  AnimatePresence,
-  useMotionValue,
-  useTransform,
-  useSpring,
-} from "framer-motion";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { EffectCreative, Keyboard, A11y } from "swiper/modules";
+import type { Swiper as SwiperType } from "swiper";
 
 interface BookViewerProps {
   menuBook: MenuBook;
@@ -19,32 +14,7 @@ interface BookViewerProps {
   initialPage?: number;
   showHint?: boolean;
   showIndicators?: boolean;
-  preloadAllPages?: boolean;
 }
-
-const pageTurnVariants = {
-  initial: (direction: "forward" | "backward") => ({
-    opacity: 0.98,
-    rotateY: direction === "forward" ? 18 : -18,
-    scale: 0.995,
-    x: direction === "forward" ? 18 : -18,
-    transformOrigin: direction === "forward" ? "right center" : "left center",
-  }),
-  animate: {
-    opacity: 1,
-    rotateY: 0,
-    scale: 1,
-    x: 0,
-    transformOrigin: "center center",
-  },
-  exit: (direction: "forward" | "backward") => ({
-    opacity: 0.98,
-    rotateY: direction === "forward" ? -18 : 18,
-    scale: 0.995,
-    x: direction === "forward" ? -18 : 18,
-    transformOrigin: direction === "forward" ? "left center" : "right center",
-  }),
-};
 
 function PageRenderer({
   page,
@@ -92,133 +62,27 @@ export default function BookViewer({
   initialPage = 0,
   showHint = true,
   showIndicators = true,
-  preloadAllPages = false,
 }: BookViewerProps) {
   const pages = menuBook.pages;
+  const maxIndex = Math.max(0, pages.length - 1);
+  const clampedInitialPage = useMemo(
+    () => Math.max(0, Math.min(initialPage, maxIndex)),
+    [initialPage, maxIndex]
+  );
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const {
-    currentPage,
-    isAnimating,
-    flipDirection,
-    goForward,
-    goBackward,
-    goToPage,
-    isFirst,
-    isLast,
-  } = usePageFlip(pages.length, initialPage);
-  const [dragOffsetX, setDragOffsetX] = useState(0);
-  const dragX = useMotionValue(0);
-  const smoothDragX = useSpring(dragX, {
-    stiffness: 420,
-    damping: 38,
-    mass: 0.18,
-  });
-  const dragTilt = useTransform(smoothDragX, [-180, 0, 180], [18, 0, -18]);
-  const dragRotateZ = useTransform(smoothDragX, [-180, 0, 180], [0.5, 0, -0.5]);
-  const dragScale = useTransform(smoothDragX, [-180, 0, 180], [0.992, 1, 0.992]);
-  const dragLiftY = useTransform(smoothDragX, [-180, 0, 180], [-2, 0, -2]);
-  const leftEdgeShade = useTransform(smoothDragX, [0, 180], [0, 0.22]);
-  const rightEdgeShade = useTransform(smoothDragX, [-180, 0], [0.22, 0]);
-  const centerGloss = useTransform(
-    smoothDragX,
-    [-180, -70, 0, 70, 180],
-    [0.18, 0.08, 0, 0.08, 0.18]
-  );
-  const previewOpacity = useTransform(
-    smoothDragX,
-    [-180, -16, 0, 16, 180],
-    [1, 0.2, 0, 0.2, 1]
-  );
-  const previewScale = useTransform(smoothDragX, [-180, 0, 180], [1, 0.985, 1]);
-  const previewTranslateX = useTransform(smoothDragX, [-180, 0, 180], [8, 0, -8]);
-
-  const previewPageIndex = useMemo(() => {
-    if (isMobileViewport) {
-      return null;
-    }
-
-    if (isAnimating) {
-      return null;
-    }
-
-    if (dragOffsetX < -8 && currentPage < pages.length - 1) {
-      return currentPage + 1;
-    }
-
-    if (dragOffsetX > 8 && currentPage > 0) {
-      return currentPage - 1;
-    }
-
-    return null;
-  }, [isAnimating, dragOffsetX, currentPage, pages.length, isMobileViewport]);
-
-  const previewPageData = previewPageIndex !== null ? pages[previewPageIndex] : null;
-  const [isPreloadingAllPages, setIsPreloadingAllPages] = useState(preloadAllPages);
-
-  useEffect(() => {
-    if (!preloadAllPages) {
-      setIsPreloadingAllPages(false);
-      return;
-    }
-
-    let isCancelled = false;
-
-    const isPdf = (url: string) => url.toLowerCase().endsWith(".pdf");
-    const preloadImage = (url: string) =>
-      new Promise<void>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve();
-        img.onerror = () => resolve();
-        img.src = url;
-      });
-
-    const preloadPdf = async (url: string) => {
-      try {
-        await fetch(url, { cache: "force-cache" });
-      } catch {
-        // Keep preload resilient: a failed asset should not block startup forever.
-      }
-    };
-
-    const startPreload = async () => {
-      setIsPreloadingAllPages(true);
-
-      const allAssetUrls = Array.from(
-        new Set(
-          pages.flatMap((page) =>
-            (page.elements || [])
-              .filter((el) => el.type === "image" && !!el.imageUrl)
-              .map((el) => el.imageUrl as string)
-          )
-        )
-      );
-
-      const imageUrls = allAssetUrls.filter((url) => !isPdf(url));
-      const pdfUrls = allAssetUrls.filter((url) => isPdf(url));
-
-      await Promise.all([
-        ...imageUrls.map((url) => preloadImage(url)),
-        ...pdfUrls.map((url) => preloadPdf(url)),
-      ]);
-
-      if (!isCancelled) {
-        setIsPreloadingAllPages(false);
-      }
-    };
-
-    void startPreload();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [preloadAllPages, pages]);
+  const [currentPage, setCurrentPage] = useState(clampedInitialPage);
+  const swiperRef = useRef<SwiperType | null>(null);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") goForward();
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") goBackward();
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        swiperRef.current?.slideNext();
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        swiperRef.current?.slidePrev();
+      }
     },
-    [goForward, goBackward]
+    []
   );
 
   useEffect(() => {
@@ -226,7 +90,12 @@ export default function BookViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  const currentPageData = pages[currentPage];
+  useEffect(() => {
+    setCurrentPage(clampedInitialPage);
+    if (swiperRef.current) {
+      swiperRef.current.slideTo(clampedInitialPage, 0, false);
+    }
+  }, [clampedInitialPage]);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -238,40 +107,35 @@ export default function BookViewer({
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
-  // Swipe gesture handler
-  const handleDragEnd = (event: any, info: any) => {
-    const swipeThreshold = fullScreen ? 36 : 28;
-    const velocityThreshold = 240;
-    
-    if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
-      goForward();
-    } else if (info.offset.x > swipeThreshold || info.velocity.x > velocityThreshold) {
-      goBackward();
-    }
+  const goForward = useCallback(() => {
+    swiperRef.current?.slideNext();
+  }, []);
 
-    setDragOffsetX(0);
-    dragX.set(0);
-  };
+  const goBackward = useCallback(() => {
+    swiperRef.current?.slidePrev();
+  }, []);
+
+  const goToPage = useCallback((page: number) => {
+    swiperRef.current?.slideTo(page);
+  }, []);
+
+  const isFirst = currentPage <= 0;
+  const isLast = currentPage >= maxIndex;
+  const isMobileFullScreen = fullScreen && isMobileViewport;
+  const canInteract = pages.length > 1;
 
   // Dimensions for the single page
   const pageMaxWidth = fullScreen ? "min(100vw, calc(100vh * 2 / 3))" : "400px";
   const containerClasses = fullScreen
     ? "flex flex-col items-center justify-center w-full min-h-screen select-none p-0"
     : "flex flex-col items-center justify-center w-full min-h-[80vh] select-none p-4";
-  const isMobileFullScreen = fullScreen && isMobileViewport;
   const stageBackground = "#070b10";
 
   return (
     <div className={containerClasses}>
-      {isPreloadingAllPages && (
-        <div className="mb-4 px-4 py-2 rounded-full bg-black/30 text-white/90 text-[10px] tracking-[0.2em] uppercase font-body">
-          Preloading menu pages...
-        </div>
-      )}
-
       {/* Page Container */}
       <div
-        className={`relative bg-[var(--bg-primary)] touch-none overflow-hidden ${
+        className={`relative bg-[var(--bg-primary)] touch-pan-y overflow-hidden ${
           isMobileFullScreen ? "shadow-none rounded-none" : "shadow-2xl rounded-lg"
         }`}
         style={{ 
@@ -291,106 +155,47 @@ export default function BookViewer({
         <div className="absolute inset-0 pointer-events-none bg-[#070b10]" />
         <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-6 pointer-events-none bg-gradient-to-r from-transparent via-black/35 to-transparent opacity-80" />
 
-        {previewPageData && previewPageIndex !== null && (
-          <motion.div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              opacity: previewOpacity,
-              scale: previewScale,
-              x: previewTranslateX,
-            }}
-          >
-            <PageRenderer
-              page={previewPageData}
-              index={previewPageIndex}
-              menuBook={menuBook}
-            />
-          </motion.div>
-        )}
-
-        <AnimatePresence mode="sync" custom={flipDirection}>
-          <motion.div
-            key={currentPage}
-            custom={flipDirection}
-            variants={pageTurnVariants}
-            drag={isAnimating || isPreloadingAllPages ? false : "x"}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.08}
-            dragMomentum={false}
-            dragTransition={{ bounceStiffness: 600, bounceDamping: 38 }}
-            whileDrag={{ cursor: "grabbing" }}
-            style={{ x: dragX }}
-            onDragStart={() => setDragOffsetX(0)}
-            onDrag={(event, info) => {
-              setDragOffsetX(info.offset.x);
-            }}
-            onDragEnd={handleDragEnd}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ 
-              duration: 0.26,
-              ease: [0.2, 0.9, 0.24, 1],
-            }}
-            className="relative w-full h-full cursor-grab active:cursor-grabbing"
-          >
-            <motion.div
-              className="w-full h-full"
-              style={{
-                rotateY: dragTilt,
-                rotateZ: dragRotateZ,
-                scale: dragScale,
-                y: dragLiftY,
-                transformStyle: "preserve-3d",
-              }}
-            >
-              <PageRenderer
-                page={currentPageData}
-                index={currentPage}
-                menuBook={menuBook}
-              />
-            </motion.div>
-
-            {/* Dynamic page shading to enhance page-turn depth */}
-            <motion.div
-              className="absolute inset-0 pointer-events-none"
-              initial={{ opacity: 0.22 }}
-              animate={{ opacity: 0 }}
-              exit={{ opacity: 0.22 }}
-              transition={{ duration: 0.18 }}
-              style={{
-                background:
-                  flipDirection === "forward"
-                    ? "linear-gradient(90deg, rgba(0,0,0,0.24), transparent 42%)"
-                    : "linear-gradient(270deg, rgba(0,0,0,0.24), transparent 42%)",
-              }}
-            />
-
-            {/* Live drag edge shading to make swipe feel like physical page torque */}
-            <motion.div
-              className="absolute inset-y-0 left-0 w-24 pointer-events-none"
-              style={{
-                opacity: leftEdgeShade,
-                background: "linear-gradient(90deg, rgba(0,0,0,0.24), transparent)",
-              }}
-            />
-            <motion.div
-              className="absolute inset-y-0 right-0 w-24 pointer-events-none"
-              style={{
-                opacity: rightEdgeShade,
-                background: "linear-gradient(270deg, rgba(0,0,0,0.24), transparent)",
-              }}
-            />
-            <motion.div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                opacity: centerGloss,
-                background:
-                  "linear-gradient(90deg, transparent 46%, rgba(255,255,255,0.16) 50%, transparent 54%)",
-              }}
-            />
-          </motion.div>
-        </AnimatePresence>
+        <Swiper
+          modules={[EffectCreative, Keyboard, A11y]}
+          effect="creative"
+          speed={380}
+          threshold={8}
+          resistanceRatio={0.75}
+          keyboard={{ enabled: true, onlyInViewport: true }}
+          allowTouchMove={canInteract}
+          onSwiper={(swiper) => {
+            swiperRef.current = swiper;
+            swiper.slideTo(clampedInitialPage, 0, false);
+            setCurrentPage(swiper.activeIndex);
+          }}
+          onSlideChange={(swiper) => setCurrentPage(swiper.activeIndex)}
+          a11y={{ enabled: true }}
+          creativeEffect={{
+            perspective: true,
+            prev: {
+              translate: ["-15%", 0, -140],
+              rotate: [0, -10, 0],
+              shadow: true,
+            },
+            next: {
+              translate: ["15%", 0, -140],
+              rotate: [0, 10, 0],
+              shadow: true,
+            },
+            limitProgress: 2,
+          }}
+          className="w-full h-full"
+        >
+          {pages.map((page, idx) => (
+            <SwiperSlide key={page.id}>
+              <div className="w-full h-full relative">
+                <PageRenderer page={page} index={idx} menuBook={menuBook} />
+                <div className="absolute inset-y-0 left-0 w-16 pointer-events-none bg-gradient-to-r from-black/10 to-transparent" />
+                <div className="absolute inset-y-0 right-0 w-16 pointer-events-none bg-gradient-to-l from-black/10 to-transparent" />
+              </div>
+            </SwiperSlide>
+          ))}
+        </Swiper>
 
         {/* Spine shadow for a stronger book feel */}
         {!isMobileFullScreen && (
@@ -403,6 +208,28 @@ export default function BookViewer({
         )}
         {!isLast && (
           <div className="absolute right-2 top-1/2 -translate-y-1/2 w-1 h-12 bg-[var(--accent-forest)]/10 rounded-full blur-[1px]" />
+        )}
+
+        {/* Mobile-safe fallback controls: tapping edges always turns pages. */}
+        {isMobileViewport && canInteract && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous page"
+              disabled={isFirst}
+              onClick={goBackward}
+              className="absolute left-0 top-0 bottom-0 w-1/4 z-20"
+              style={{ touchAction: "manipulation" }}
+            />
+            <button
+              type="button"
+              aria-label="Next page"
+              disabled={isLast}
+              onClick={goForward}
+              className="absolute right-0 top-0 bottom-0 w-1/4 z-20"
+              style={{ touchAction: "manipulation" }}
+            />
+          </>
         )}
       </div>
 
@@ -433,7 +260,7 @@ export default function BookViewer({
 
       {showHint && (
         <p className="font-body text-[10px] mt-6 text-[var(--text-muted)] tracking-[0.2em] uppercase opacity-60">
-          Swipe left or right to turn page
+          {isMobileViewport ? "Swipe or tap edges to turn page" : "Swipe left or right to turn page"}
         </p>
       )}
     </div>
