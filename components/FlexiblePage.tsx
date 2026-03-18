@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { MenuPage, PageElement, MenuItem } from "@/types/menu";
 
 interface FlexiblePageProps {
@@ -13,8 +14,30 @@ export default function FlexiblePage({
   inventory,
   pageNumber,
 }: FlexiblePageProps) {
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      setIsMobileViewport(window.innerWidth < 768);
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, []);
+
   const isPdfUrl = (url?: string) =>
     typeof url === "string" && url.toLowerCase().endsWith(".pdf");
+
+  const getPdfImageFallbackUrl = (url?: string) => {
+    if (!url) return null;
+    const match = url.match(/^\/splited\/Summer202026-(\d+)\.pdf$/i);
+    if (!match) return null;
+    return `/pages/page-${match[1]}.png`;
+  };
   
   const renderElement = (el: PageElement) => {
     const { x, y, width, height, rotation = 0, scale = 1, zIndex = 1 } = el.position;
@@ -88,6 +111,20 @@ export default function FlexiblePage({
           const imageClassName = isFullBleedBackground
             ? "overflow-hidden bg-white pointer-events-none"
             : "rounded-2xl overflow-hidden shadow-lg border-2 border-white/30 bg-white";
+
+          const mobileFallbackUrl = getPdfImageFallbackUrl(el.imageUrl);
+          if (isMobileViewport && mobileFallbackUrl) {
+            return (
+              <div key={el.id} style={style} className={imageClassName}>
+                <img
+                  src={mobileFallbackUrl}
+                  alt="menu page"
+                  className="w-full h-full object-cover pointer-events-none"
+                />
+              </div>
+            );
+          }
+
           return (
             <div key={el.id} style={style} className={imageClassName}>
               <iframe

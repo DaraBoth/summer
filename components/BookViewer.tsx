@@ -92,6 +92,7 @@ export default function BookViewer({
   preloadAllPages = false,
 }: BookViewerProps) {
   const pages = menuBook.pages;
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const {
     currentPage,
     isAnimating,
@@ -127,6 +128,10 @@ export default function BookViewer({
   const previewScale = useTransform(smoothDragX, [-220, 0, 220], [1, 0.986, 1]);
 
   const previewPageIndex = useMemo(() => {
+    if (isMobileViewport) {
+      return null;
+    }
+
     if (isAnimating) {
       return null;
     }
@@ -140,7 +145,7 @@ export default function BookViewer({
     }
 
     return null;
-  }, [isAnimating, dragOffsetX, currentPage, pages.length]);
+  }, [isAnimating, dragOffsetX, currentPage, pages.length, isMobileViewport]);
 
   const previewPageData = previewPageIndex !== null ? pages[previewPageIndex] : null;
   const [isPreloadingAllPages, setIsPreloadingAllPages] = useState(preloadAllPages);
@@ -218,6 +223,16 @@ export default function BookViewer({
 
   const currentPageData = pages[currentPage];
 
+  useEffect(() => {
+    const updateViewport = () => {
+      setIsMobileViewport(window.innerWidth < 768);
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+
   // Swipe gesture handler
   const handleDragEnd = (event: any, info: any) => {
     const swipeThreshold = fullScreen ? 40 : 30;
@@ -238,6 +253,7 @@ export default function BookViewer({
   const containerClasses = fullScreen
     ? "flex flex-col items-center justify-center w-full min-h-screen select-none p-0"
     : "flex flex-col items-center justify-center w-full min-h-[80vh] select-none p-4";
+  const isMobileFullScreen = fullScreen && isMobileViewport;
 
   return (
     <div className={containerClasses}>
@@ -249,17 +265,21 @@ export default function BookViewer({
 
       {/* Page Container */}
       <div
-        className="relative shadow-2xl rounded-lg bg-[var(--bg-primary)] touch-none overflow-hidden"
+        className={`relative bg-[var(--bg-primary)] touch-none overflow-hidden ${
+          isMobileFullScreen ? "shadow-none rounded-none" : "shadow-2xl rounded-lg"
+        }`}
         style={{ 
           perspective: 2200,
           background: fullScreen ? "#111820" : "var(--bg-primary)",
-          width: "100%", 
-          maxWidth: pageMaxWidth,
-          height: "auto", 
-          aspectRatio: "2/3",
-          border: fullScreen
-            ? "1px solid rgba(255,255,255,0.08)"
-            : "1px solid rgba(212,175,106,0.1)",
+          width: isMobileFullScreen ? "100vw" : "100%",
+          maxWidth: isMobileFullScreen ? "100vw" : pageMaxWidth,
+          height: isMobileFullScreen ? "100dvh" : "auto",
+          aspectRatio: isMobileFullScreen ? "auto" : "2/3",
+          border: isMobileFullScreen
+            ? "none"
+            : fullScreen
+              ? "1px solid rgba(255,255,255,0.08)"
+              : "1px solid rgba(212,175,106,0.1)",
         }}
       >
         {previewPageData && previewPageIndex !== null && (
@@ -362,7 +382,9 @@ export default function BookViewer({
         </AnimatePresence>
 
         {/* Spine shadow for a stronger book feel */}
-        <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-black/10 to-transparent" />
+        {!isMobileFullScreen && (
+          <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-black/10 to-transparent" />
+        )}
 
         {/* Swipe Feedback Hints (Subtle) */}
         {!isFirst && (

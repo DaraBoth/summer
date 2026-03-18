@@ -106,6 +106,12 @@ export default function UploadPage() {
 
         <div className="mt-8 flex gap-3">
           <a
+            href="/split"
+            className="rounded-full border border-[var(--accent-forest)]/30 text-[var(--accent-forest)] px-4 py-2 text-[10px] font-bold uppercase tracking-widest"
+          >
+            Open Split Tool
+          </a>
+          <a
             href="/"
             target="_blank"
             rel="noreferrer"

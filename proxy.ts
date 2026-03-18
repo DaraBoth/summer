@@ -13,7 +13,8 @@ function unauthorizedResponse() {
 export function proxy(request: NextRequest) {
   if (
     !request.nextUrl.pathname.startsWith("/edit") &&
-    !request.nextUrl.pathname.startsWith("/upload")
+    !request.nextUrl.pathname.startsWith("/upload") &&
+    !request.nextUrl.pathname.startsWith("/split")
   ) {
     return NextResponse.next();
   }
@@ -51,5 +52,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/edit/:path*", "/upload/:path*"],
+  matcher: ["/edit/:path*", "/upload/:path*", "/split/:path*"],
 };
