@@ -20,6 +20,10 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: "/app/api/pdf-worker",
+        destination: "/api/pdf-worker",
+      },
+      {
         source: "/menu.pdf",
         destination: "/api/pdf",
       },

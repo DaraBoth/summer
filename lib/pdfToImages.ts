@@ -5,6 +5,25 @@ interface ConvertOptions {
   onProgress?: (completedPages: number, totalPages: number) => void;
 }
 
+async function resolvePdfWorkerSrc(): Promise<string> {
+  const candidates = ["/api/pdf-worker", "/app/api/pdf-worker"];
+
+  for (const candidatePath of candidates) {
+    const candidateUrl = new URL(candidatePath, window.location.origin).toString();
+
+    try {
+      const response = await fetch(candidateUrl, { method: "HEAD" });
+      if (response.ok) {
+        return candidateUrl;
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return new URL("/api/pdf-worker", window.location.origin).toString();
+}
+
 export async function convertPdfFileToImages(
   file: File,
   options: ConvertOptions = {}
@@ -14,7 +33,7 @@ export async function convertPdfFileToImages(
   const pdfjs = await import("pdfjs-dist");
 
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
+    pdfjs.GlobalWorkerOptions.workerSrc = await resolvePdfWorkerSrc();
   }
 
   const fileBytes = await file.arrayBuffer();
