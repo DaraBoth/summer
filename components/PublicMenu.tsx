@@ -12,12 +12,12 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#070b10]">
+      <div className="min-h-screen flex items-center justify-center bg-[#f6e8d5]">
         <div className="text-center">
-          <div className="font-menu-title text-3xl mb-2 animate-pulse text-white/90">
+          <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
             {menuBook.restaurantName || "Le Jardin d'Or"}
           </div> 
-          <p className="font-body text-[10px] tracking-[0.2em] uppercase text-white/50">
+          <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
             Opening your menu...
           </p>
         </div>
@@ -26,12 +26,12 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
   }
 
   return (
-    <main className="relative min-h-screen bg-[#070b10] overflow-hidden">
+    <main className="relative min-h-screen bg-[var(--bg-secondary)] overflow-hidden">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 25%, rgba(91,123,105,0.22), rgba(7,11,16,0.9) 55%, #070b10 100%)",
+            "radial-gradient(ellipse at 50% 20%, rgba(255,220,176,0.85), rgba(245,202,147,0.55) 45%, rgba(230,183,128,0.45) 65%, rgba(246,232,213,1) 100%)",
         }}
       />
       <BookViewer

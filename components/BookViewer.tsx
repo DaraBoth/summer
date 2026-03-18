@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MenuBook, MenuPage } from "@/types/menu";
+import { DEFAULT_MENU } from "@/types/defaultMenu";
 import CoverPage from "./CoverPage";
 import FlexiblePage from "./FlexiblePage";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -63,7 +64,20 @@ export default function BookViewer({
   showHint = true,
   showIndicators = true,
 }: BookViewerProps) {
-  const pages = menuBook.pages;
+  const pages = useMemo(() => {
+    if (menuBook.pages.length >= DEFAULT_MENU.pages.length) {
+      return menuBook.pages;
+    }
+
+    const missingPages = DEFAULT_MENU.pages
+      .slice(menuBook.pages.length)
+      .map((page) => ({
+        ...page,
+        elements: page.elements.map((el) => ({ ...el })),
+      }));
+
+    return [...menuBook.pages, ...missingPages];
+  }, [menuBook.pages]);
   const maxIndex = Math.max(0, pages.length - 1);
   const clampedInitialPage = useMemo(
     () => Math.max(0, Math.min(initialPage, maxIndex)),
@@ -71,18 +85,31 @@ export default function BookViewer({
   );
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [currentPage, setCurrentPage] = useState(clampedInitialPage);
+  const [showSwipeGuide, setShowSwipeGuide] = useState(false);
   const swiperRef = useRef<SwiperType | null>(null);
+  const swipeGuideStorageKey = "menu_swipe_guide_seen_v1";
+
+  const dismissSwipeGuide = useCallback(() => {
+    setShowSwipeGuide(false);
+    try {
+      window.localStorage.setItem(swipeGuideStorageKey, "1");
+    } catch {
+      // Ignore storage failures (e.g. private mode restrictions).
+    }
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        dismissSwipeGuide();
         swiperRef.current?.slideNext();
       }
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        dismissSwipeGuide();
         swiperRef.current?.slidePrev();
       }
     },
-    []
+    [dismissSwipeGuide]
   );
 
   useEffect(() => {
@@ -124,12 +151,38 @@ export default function BookViewer({
   const isMobileFullScreen = fullScreen && isMobileViewport;
   const canInteract = pages.length > 1;
 
+  useEffect(() => {
+    if (!isMobileViewport || !canInteract) {
+      setShowSwipeGuide(false);
+      return;
+    }
+
+    let hasSeenGuide = false;
+    try {
+      hasSeenGuide = window.localStorage.getItem(swipeGuideStorageKey) === "1";
+    } catch {
+      hasSeenGuide = false;
+    }
+
+    if (hasSeenGuide) {
+      setShowSwipeGuide(false);
+      return;
+    }
+
+    setShowSwipeGuide(true);
+    const timer = window.setTimeout(() => {
+      dismissSwipeGuide();
+    }, 5200);
+
+    return () => window.clearTimeout(timer);
+  }, [isMobileViewport, canInteract, dismissSwipeGuide]);
+
   // Dimensions for the single page
   const pageMaxWidth = fullScreen ? "min(100vw, calc(100vh * 2 / 3))" : "400px";
   const containerClasses = fullScreen
     ? "flex flex-col items-center justify-center w-full min-h-screen select-none p-0"
     : "flex flex-col items-center justify-center w-full min-h-[80vh] select-none p-4";
-  const stageBackground = "#070b10";
+  const stageBackground = "#f3dfc4";
 
   return (
     <div className={containerClasses}>
@@ -138,6 +191,11 @@ export default function BookViewer({
         className={`relative bg-[var(--bg-primary)] touch-pan-y overflow-hidden ${
           isMobileFullScreen ? "shadow-none rounded-none" : "shadow-2xl rounded-lg"
         }`}
+        onPointerDownCapture={() => {
+          if (showSwipeGuide) {
+            dismissSwipeGuide();
+          }
+        }}
         style={{ 
           perspective: 2200,
           background: stageBackground,
@@ -148,12 +206,12 @@ export default function BookViewer({
           border: isMobileFullScreen
             ? "none"
             : fullScreen
-              ? "1px solid rgba(255,255,255,0.08)"
-              : "1px solid rgba(212,175,106,0.1)",
+              ? "1px solid rgba(153,100,58,0.18)"
+              : "1px solid rgba(153,100,58,0.14)",
         }}
       >
-        <div className="absolute inset-0 pointer-events-none bg-[#070b10]" />
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-6 pointer-events-none bg-gradient-to-r from-transparent via-black/35 to-transparent opacity-80" />
+        <div className="absolute inset-0 pointer-events-none bg-[#f3dfc4]" />
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-6 pointer-events-none bg-gradient-to-r from-transparent via-[#8c5c35]/25 to-transparent opacity-80" />
 
         <Swiper
           modules={[EffectCreative, Keyboard, A11y]}
@@ -168,7 +226,10 @@ export default function BookViewer({
             swiper.slideTo(clampedInitialPage, 0, false);
             setCurrentPage(swiper.activeIndex);
           }}
-          onSlideChange={(swiper) => setCurrentPage(swiper.activeIndex)}
+          onSlideChange={(swiper) => {
+            setCurrentPage(swiper.activeIndex);
+            dismissSwipeGuide();
+          }}
           a11y={{ enabled: true }}
           creativeEffect={{
             perspective: true,
@@ -190,16 +251,32 @@ export default function BookViewer({
             <SwiperSlide key={page.id}>
               <div className="w-full h-full relative">
                 <PageRenderer page={page} index={idx} menuBook={menuBook} />
-                <div className="absolute inset-y-0 left-0 w-16 pointer-events-none bg-gradient-to-r from-black/10 to-transparent" />
-                <div className="absolute inset-y-0 right-0 w-16 pointer-events-none bg-gradient-to-l from-black/10 to-transparent" />
+                <div className="absolute inset-y-0 left-0 w-16 pointer-events-none bg-gradient-to-r from-[#8c5c35]/14 to-transparent" />
+                <div className="absolute inset-y-0 right-0 w-16 pointer-events-none bg-gradient-to-l from-[#8c5c35]/14 to-transparent" />
               </div>
             </SwiperSlide>
           ))}
         </Swiper>
 
+        {showSwipeGuide && (
+          <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
+            <div className="swipe-guide-panel">
+              <div className="swipe-guide-track">
+                <div className="swipe-guide-hand" />
+              </div>
+              <p className="font-body text-[11px] tracking-[0.18em] uppercase text-[var(--accent-dark)] mt-3 text-center">
+                Swipe in the middle area
+              </p>
+              <p className="font-body text-[10px] tracking-[0.14em] uppercase text-[var(--text-muted)] mt-1 text-center">
+                Left or right to turn pages
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Spine shadow for a stronger book feel */}
         {!isMobileFullScreen && (
-          <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-black/18 to-transparent" />
+          <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-[#8c5c35]/20 to-transparent" />
         )}
 
         {/* Swipe Feedback Hints (Subtle) */}
@@ -217,7 +294,10 @@ export default function BookViewer({
               type="button"
               aria-label="Previous page"
               disabled={isFirst}
-              onClick={goBackward}
+              onClick={() => {
+                dismissSwipeGuide();
+                goBackward();
+              }}
               className="absolute left-0 top-0 bottom-0 w-1/4 z-20"
               style={{ touchAction: "manipulation" }}
             />
@@ -225,7 +305,10 @@ export default function BookViewer({
               type="button"
               aria-label="Next page"
               disabled={isLast}
-              onClick={goForward}
+              onClick={() => {
+                dismissSwipeGuide();
+                goForward();
+              }}
               className="absolute right-0 top-0 bottom-0 w-1/4 z-20"
               style={{ touchAction: "manipulation" }}
             />
@@ -238,7 +321,10 @@ export default function BookViewer({
           {pages.map((_, idx) => (
             <button
               key={idx}
-              onClick={() => goToPage(idx)}
+              onClick={() => {
+                dismissSwipeGuide();
+                goToPage(idx);
+              }}
               className="transition-all duration-300"
               style={{
                 width: idx === currentPage ? 24 : 8,
