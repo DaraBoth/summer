@@ -40,6 +40,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
         showIndicators={false}
         showHint={false}
         initialPage={initialPage}
+        preloadAllPages
       />
     </main>
   );

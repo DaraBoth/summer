@@ -19,6 +19,7 @@ interface BookViewerProps {
   initialPage?: number;
   showHint?: boolean;
   showIndicators?: boolean;
+  preloadAllPages?: boolean;
 }
 
 const pageTurnVariants = {
@@ -88,6 +89,7 @@ export default function BookViewer({
   initialPage = 0,
   showHint = true,
   showIndicators = true,
+  preloadAllPages = false,
 }: BookViewerProps) {
   const pages = menuBook.pages;
   const {
@@ -141,6 +143,65 @@ export default function BookViewer({
   }, [isAnimating, dragOffsetX, currentPage, pages.length]);
 
   const previewPageData = previewPageIndex !== null ? pages[previewPageIndex] : null;
+  const [isPreloadingAllPages, setIsPreloadingAllPages] = useState(preloadAllPages);
+
+  useEffect(() => {
+    if (!preloadAllPages) {
+      setIsPreloadingAllPages(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const isPdf = (url: string) => url.toLowerCase().endsWith(".pdf");
+    const preloadImage = (url: string) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = url;
+      });
+
+    const preloadPdf = async (url: string) => {
+      try {
+        await fetch(url, { cache: "force-cache" });
+      } catch {
+        // Keep preload resilient: a failed asset should not block startup forever.
+      }
+    };
+
+    const startPreload = async () => {
+      setIsPreloadingAllPages(true);
+
+      const allAssetUrls = Array.from(
+        new Set(
+          pages.flatMap((page) =>
+            (page.elements || [])
+              .filter((el) => el.type === "image" && !!el.imageUrl)
+              .map((el) => el.imageUrl as string)
+          )
+        )
+      );
+
+      const imageUrls = allAssetUrls.filter((url) => !isPdf(url));
+      const pdfUrls = allAssetUrls.filter((url) => isPdf(url));
+
+      await Promise.all([
+        ...imageUrls.map((url) => preloadImage(url)),
+        ...pdfUrls.map((url) => preloadPdf(url)),
+      ]);
+
+      if (!isCancelled) {
+        setIsPreloadingAllPages(false);
+      }
+    };
+
+    void startPreload();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [preloadAllPages, pages]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -180,6 +241,12 @@ export default function BookViewer({
 
   return (
     <div className={containerClasses}>
+      {isPreloadingAllPages && (
+        <div className="mb-4 px-4 py-2 rounded-full bg-black/30 text-white/90 text-[10px] tracking-[0.2em] uppercase font-body">
+          Preloading menu pages...
+        </div>
+      )}
+
       {/* Page Container */}
       <div
         className="relative shadow-2xl rounded-lg bg-[var(--bg-primary)] touch-none overflow-hidden"
@@ -216,7 +283,7 @@ export default function BookViewer({
             key={currentPage}
             custom={flipDirection}
             variants={pageTurnVariants}
-            drag={isAnimating ? false : "x"}
+            drag={isAnimating || isPreloadingAllPages ? false : "x"}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.08}
             dragMomentum={false}
