@@ -10,7 +10,6 @@ import {
   useMotionValue,
   useTransform,
   useSpring,
-  useMotionTemplate,
 } from "framer-motion";
 
 interface BookViewerProps {
@@ -25,9 +24,9 @@ interface BookViewerProps {
 
 const pageTurnVariants = {
   initial: (direction: "forward" | "backward") => ({
-    opacity: 0.92,
-    rotateY: direction === "forward" ? 110 : -110,
-    scale: 0.985,
+    opacity: 0.98,
+    rotateY: direction === "forward" ? 18 : -18,
+    scale: 0.995,
     x: direction === "forward" ? 18 : -18,
     transformOrigin: direction === "forward" ? "right center" : "left center",
   }),
@@ -39,9 +38,9 @@ const pageTurnVariants = {
     transformOrigin: "center center",
   },
   exit: (direction: "forward" | "backward") => ({
-    opacity: 0.92,
-    rotateY: direction === "forward" ? -110 : 110,
-    scale: 0.985,
+    opacity: 0.98,
+    rotateY: direction === "forward" ? -18 : 18,
+    scale: 0.995,
     x: direction === "forward" ? -18 : 18,
     transformOrigin: direction === "forward" ? "left center" : "right center",
   }),
@@ -110,32 +109,28 @@ export default function BookViewer({
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const dragX = useMotionValue(0);
   const smoothDragX = useSpring(dragX, {
-    stiffness: 340,
-    damping: 34,
-    mass: 0.22,
+    stiffness: 420,
+    damping: 38,
+    mass: 0.18,
   });
-  const dragTilt = useTransform(smoothDragX, [-260, 0, 260], [70, 0, -70]);
-  const dragRotateZ = useTransform(smoothDragX, [-260, 0, 260], [1.4, 0, -1.4]);
-  const dragScale = useTransform(smoothDragX, [-260, 0, 260], [0.975, 1, 0.975]);
-  const dragLiftY = useTransform(smoothDragX, [-260, 0, 260], [-4, 0, -4]);
-  const dragShadowOpacity = useTransform(smoothDragX, [-260, -40, 0, 40, 260], [0.42, 0.18, 0.08, 0.18, 0.42]);
-  const leftEdgeShade = useTransform(smoothDragX, [0, 260], [0, 0.34]);
-  const rightEdgeShade = useTransform(smoothDragX, [-260, 0], [0.34, 0]);
+  const dragTilt = useTransform(smoothDragX, [-180, 0, 180], [18, 0, -18]);
+  const dragRotateZ = useTransform(smoothDragX, [-180, 0, 180], [0.5, 0, -0.5]);
+  const dragScale = useTransform(smoothDragX, [-180, 0, 180], [0.992, 1, 0.992]);
+  const dragLiftY = useTransform(smoothDragX, [-180, 0, 180], [-2, 0, -2]);
+  const leftEdgeShade = useTransform(smoothDragX, [0, 180], [0, 0.22]);
+  const rightEdgeShade = useTransform(smoothDragX, [-180, 0], [0.22, 0]);
   const centerGloss = useTransform(
     smoothDragX,
-    [-260, -100, 0, 100, 260],
-    [0.26, 0.1, 0, 0.1, 0.26]
+    [-180, -70, 0, 70, 180],
+    [0.18, 0.08, 0, 0.08, 0.18]
   );
   const previewOpacity = useTransform(
     smoothDragX,
-    [-260, -24, 0, 24, 260],
-    [1, 0.18, 0, 0.18, 1]
+    [-180, -16, 0, 16, 180],
+    [1, 0.2, 0, 0.2, 1]
   );
-  const previewScale = useTransform(smoothDragX, [-260, 0, 260], [1, 0.965, 1]);
-  const previewTranslateX = useTransform(smoothDragX, [-260, 0, 260], [10, 0, -10]);
-  const previewBrightness = useTransform(smoothDragX, [-260, 0, 260], [0.95, 0.72, 0.95]);
-  const stageGlow = useTransform(smoothDragX, [-260, 0, 260], [0.18, 0.1, 0.18]);
-  const pageShadow = useMotionTemplate`0 24px 60px rgba(0,0,0,${dragShadowOpacity})`;
+  const previewScale = useTransform(smoothDragX, [-180, 0, 180], [1, 0.985, 1]);
+  const previewTranslateX = useTransform(smoothDragX, [-180, 0, 180], [8, 0, -8]);
 
   const previewPageIndex = useMemo(() => {
     if (isMobileViewport) {
@@ -245,8 +240,8 @@ export default function BookViewer({
 
   // Swipe gesture handler
   const handleDragEnd = (event: any, info: any) => {
-    const swipeThreshold = fullScreen ? 40 : 30;
-    const velocityThreshold = 280;
+    const swipeThreshold = fullScreen ? 36 : 28;
+    const velocityThreshold = 240;
     
     if (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) {
       goForward();
@@ -293,16 +288,8 @@ export default function BookViewer({
               : "1px solid rgba(212,175,106,0.1)",
         }}
       >
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            opacity: stageGlow,
-            background:
-              "radial-gradient(circle at 50% 50%, rgba(97,126,110,0.28), rgba(7,11,16,0.92) 58%, #070b10 100%)",
-          }}
-        />
-
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 pointer-events-none bg-gradient-to-r from-white/5 via-black/35 to-white/5 opacity-70" />
+        <div className="absolute inset-0 pointer-events-none bg-[#070b10]" />
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-6 pointer-events-none bg-gradient-to-r from-transparent via-black/35 to-transparent opacity-80" />
 
         {previewPageData && previewPageIndex !== null && (
           <motion.div
@@ -311,7 +298,6 @@ export default function BookViewer({
               opacity: previewOpacity,
               scale: previewScale,
               x: previewTranslateX,
-              filter: useMotionTemplate`brightness(${previewBrightness})`,
             }}
           >
             <PageRenderer
@@ -331,7 +317,7 @@ export default function BookViewer({
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.08}
             dragMomentum={false}
-            dragTransition={{ bounceStiffness: 560, bounceDamping: 34 }}
+            dragTransition={{ bounceStiffness: 600, bounceDamping: 38 }}
             whileDrag={{ cursor: "grabbing" }}
             style={{ x: dragX }}
             onDragStart={() => setDragOffsetX(0)}
@@ -343,8 +329,8 @@ export default function BookViewer({
             animate="animate"
             exit="exit"
             transition={{ 
-              duration: 0.38,
-              ease: [0.22, 0.88, 0.24, 1],
+              duration: 0.26,
+              ease: [0.2, 0.9, 0.24, 1],
             }}
             className="relative w-full h-full cursor-grab active:cursor-grabbing"
           >
@@ -355,7 +341,6 @@ export default function BookViewer({
                 rotateZ: dragRotateZ,
                 scale: dragScale,
                 y: dragLiftY,
-                boxShadow: pageShadow,
                 transformStyle: "preserve-3d",
               }}
             >
@@ -372,12 +357,12 @@ export default function BookViewer({
               initial={{ opacity: 0.22 }}
               animate={{ opacity: 0 }}
               exit={{ opacity: 0.22 }}
-              transition={{ duration: 0.28 }}
+              transition={{ duration: 0.18 }}
               style={{
                 background:
                   flipDirection === "forward"
-                    ? "linear-gradient(90deg, rgba(0,0,0,0.3), transparent 38%)"
-                    : "linear-gradient(270deg, rgba(0,0,0,0.3), transparent 38%)",
+                    ? "linear-gradient(90deg, rgba(0,0,0,0.24), transparent 42%)"
+                    : "linear-gradient(270deg, rgba(0,0,0,0.24), transparent 42%)",
               }}
             />
 
@@ -386,14 +371,14 @@ export default function BookViewer({
               className="absolute inset-y-0 left-0 w-24 pointer-events-none"
               style={{
                 opacity: leftEdgeShade,
-                background: "linear-gradient(90deg, rgba(0,0,0,0.42), transparent)",
+                background: "linear-gradient(90deg, rgba(0,0,0,0.24), transparent)",
               }}
             />
             <motion.div
               className="absolute inset-y-0 right-0 w-24 pointer-events-none"
               style={{
                 opacity: rightEdgeShade,
-                background: "linear-gradient(270deg, rgba(0,0,0,0.42), transparent)",
+                background: "linear-gradient(270deg, rgba(0,0,0,0.24), transparent)",
               }}
             />
             <motion.div
@@ -401,20 +386,7 @@ export default function BookViewer({
               style={{
                 opacity: centerGloss,
                 background:
-                  "linear-gradient(90deg, transparent 45%, rgba(255,255,255,0.22) 50%, transparent 55%)",
-              }}
-            />
-            <motion.div
-              className="absolute inset-y-0 pointer-events-none"
-              style={{
-                left: flipDirection === "forward" ? 0 : "auto",
-                right: flipDirection === "forward" ? "auto" : 0,
-                width: 18,
-                opacity: centerGloss,
-                background:
-                  flipDirection === "forward"
-                    ? "linear-gradient(90deg, rgba(255,255,255,0.34), rgba(255,255,255,0.02))"
-                    : "linear-gradient(270deg, rgba(255,255,255,0.34), rgba(255,255,255,0.02))",
+                  "linear-gradient(90deg, transparent 46%, rgba(255,255,255,0.16) 50%, transparent 54%)",
               }}
             />
           </motion.div>
@@ -422,7 +394,7 @@ export default function BookViewer({
 
         {/* Spine shadow for a stronger book feel */}
         {!isMobileFullScreen && (
-          <div className="absolute left-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-r from-black/40 via-black/14 to-transparent" />
+          <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-black/18 to-transparent" />
         )}
 
         {/* Swipe Feedback Hints (Subtle) */}
