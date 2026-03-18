@@ -47,6 +47,7 @@ export interface MenuPage {
   type: "cover" | "content" | "back-cover"; // Simplified types
   title?: string; // Metadata
   titleKh?: string;
+  subtitle?: string;
   elements: PageElement[];
   backgroundColor?: string;
   backgroundImage?: string;
