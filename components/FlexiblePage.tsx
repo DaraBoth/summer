@@ -109,7 +109,7 @@ export default function FlexiblePage({
       case "image":
         if (isPdfUrl(el.imageUrl)) {
           const imageClassName = isFullBleedBackground
-            ? "overflow-hidden bg-white pointer-events-none"
+            ? "overflow-hidden bg-white pointer-events-none flex items-center justify-center"
             : "rounded-2xl overflow-hidden shadow-lg border-2 border-white/30 bg-white";
 
           const mobileFallbackUrl = getPdfImageFallbackUrl(el.imageUrl);
@@ -119,7 +119,9 @@ export default function FlexiblePage({
                 <img
                   src={mobileFallbackUrl}
                   alt="menu page"
-                  className="w-full h-full object-cover pointer-events-none"
+                  className={`pointer-events-none ${
+                    isFullBleedBackground ? "w-full h-full object-contain" : "w-full h-full object-cover"
+                  }`}
                 />
               </div>
             );
@@ -135,9 +137,18 @@ export default function FlexiblePage({
             </div>
           );
         }
+
+        const imageClassName = isFullBleedBackground
+          ? "overflow-hidden bg-white pointer-events-none flex items-center justify-center"
+          : "rounded-2xl overflow-hidden shadow-lg border-2 border-white/30";
+
         return (
-          <div key={el.id} style={style} className="rounded-2xl overflow-hidden shadow-lg border-2 border-white/30">
-            <img src={el.imageUrl} alt="element" className="w-full h-full object-cover" />
+          <div key={el.id} style={style} className={imageClassName}>
+            <img
+              src={el.imageUrl}
+              alt="element"
+              className={isFullBleedBackground ? "w-full h-full object-contain" : "w-full h-full object-cover"}
+            />
           </div>
         );
 
