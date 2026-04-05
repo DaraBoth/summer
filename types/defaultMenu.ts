@@ -4,7 +4,7 @@ export const DEFAULT_MENU: MenuBook = {
   restaurantName: "Summer Menu",
   restaurantNameKh: "ម៉ឺនុយSummer",
   tagline: "Quality Experience & Professional Service",
-  pages: Array.from({ length: 12 }, (_, i) => ({
+  pages: Array.from({ length: 14 }, (_, i) => ({
     id: `page-${i + 1}`,
     type: "content",
     title: `Section ${i + 1}`,
