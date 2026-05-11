@@ -22,7 +22,7 @@ function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
         el.type === "image" &&
         /^bg-\d+(?:-\d+)?$/i.test(el.id) &&
         (/^\/pages\/page-\d+\.png$/i.test(oldUrl) ||
-          /^\/splited\/Summer202026-\d+\.pdf$/i.test(oldUrl) ||
+          /^\/splited\/summer20menu-\d+\.pdf$/i.test(oldUrl) ||
           /^\/menu\/menu-\d+\.png$/i.test(oldUrl));
 
       if (!isLegacyBackground) {

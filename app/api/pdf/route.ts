@@ -17,7 +17,7 @@ let cachedPdf: PdfCache = null;
 
 function resolvePdfPath(): string {
   const publicDir = path.join(process.cwd(), 'public');
-  const candidates = ['menu.pdf', 'Summer202026.pdf'];
+  const candidates = ['menu.pdf'];
 
   for (const fileName of candidates) {
     const candidatePath = path.join(publicDir, fileName);
@@ -26,7 +26,7 @@ function resolvePdfPath(): string {
     }
   }
 
-  return path.join(publicDir, 'Summer202026.pdf');
+  return path.join(publicDir, 'menu.pdf');
 }
 
 function loadPdfCache(filePath: string): NonNullable<PdfCache> {

@@ -34,7 +34,7 @@ export default function FlexiblePage({
 
   const getPdfImageFallbackUrl = (url?: string) => {
     if (!url) return null;
-    const match = url.match(/^\/splited\/Summer202026-(\d+)\.pdf$/i);
+    const match = url.match(/^\/splited\/summer20menu-(\d+)\.pdf$/i);
     if (!match) return null;
     return `/menu/menu-${match[1]}.png`;
   };
