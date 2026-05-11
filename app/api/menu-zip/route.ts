@@ -7,6 +7,21 @@ export const runtime = "nodejs";
 
 const MENU_DIR = path.join(process.cwd(), "public", "menu");
 
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    endpoint: "/api/menu-zip",
+    method: "POST",
+    message: "Upload a zip file using multipart/form-data with field name 'zipFile'.",
+    workflow: [
+      "Rename your source PDF to menu",
+      "Split it using https://www.ilovepdf.com/split_pdf",
+      "Download the generated menu.zip",
+      "Upload menu.zip from the /upload page",
+    ],
+  });
+}
+
 function normalizeZipPath(entryName: string): string {
   return entryName.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
 }
