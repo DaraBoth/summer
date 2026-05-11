@@ -196,7 +196,10 @@ export default function UploadPage() {
               {menuBook.sourcePdf.pageCount} pages · Imported {new Date(menuBook.sourcePdf.importedAt).toLocaleString()}
             </p>
           </div>
-        )}lassName="mt-4 text-sm text-[var(--accent-forest)]">{progressText}</p>
+        )}
+
+        {progress && isConverting && (
+          <p className="mt-4 text-sm text-[var(--accent-forest)]">{progressText}</p>
         )}
 
         {error && (
