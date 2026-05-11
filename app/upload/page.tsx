@@ -150,6 +150,9 @@ export default function UploadPage() {
               If you want, this can be extended later with a commit step, but the safest default is direct replacement only.
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
+              <a href="/menu-replacer" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
+                Menu Replacer Guide
+              </a>
               <a href="/split" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
                 Open Split Tool
               </a>
