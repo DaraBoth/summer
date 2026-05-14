@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { MenuBook, MenuItem, MenuPage, PageElement } from "@/types/menu";
-import { DEFAULT_MENU } from "@/types/defaultMenu";
+import { DEFAULT_MENU, createDefaultMenu } from "@/types/defaultMenu";
 import { v4 as uuidv4 } from "uuid";
 import localforage from "localforage";
 
@@ -13,7 +13,39 @@ const menuStorage = localforage.createInstance({
   storeName: "menu_book",
 });
 
-function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
+interface PublicFilesResponse {
+  files?: Array<{ name: string; path: string }>;
+}
+
+function extractMenuPngNumbers(files: Array<{ path: string }>): number[] {
+  const numbers = files
+    .map((file) => {
+      const match = file.path.match(/^\/menu\/menu-(\d+)\.png$/i);
+      return match ? Number(match[1]) : null;
+    })
+    .filter((value): value is number => Number.isFinite(value));
+
+  return [...new Set(numbers)].sort((a, b) => a - b);
+}
+
+async function buildDynamicDefaultMenu(): Promise<MenuBook> {
+  try {
+    const response = await fetch("/api/public-files", { cache: "no-store" });
+    if (!response.ok) {
+      return DEFAULT_MENU;
+    }
+
+    const payload = (await response.json()) as PublicFilesResponse;
+    const files = payload.files || [];
+    const menuPngNumbers = extractMenuPngNumbers(files);
+
+    return createDefaultMenu(menuPngNumbers);
+  } catch {
+    return DEFAULT_MENU;
+  }
+}
+
+function migrateLegacyPageBackgrounds(book: MenuBook, templateBook: MenuBook = DEFAULT_MENU): MenuBook {
   const migratedPages = (book.pages || []).map((page, pageIndex) => ({
     ...page,
     elements: (page.elements || []).map((el) => {
@@ -55,8 +87,8 @@ function migrateLegacyPageBackgrounds(book: MenuBook): MenuBook {
   });
 
   const missingDefaultPages =
-    normalizedPages.length < DEFAULT_MENU.pages.length
-      ? DEFAULT_MENU.pages.slice(normalizedPages.length).map((page) => ({
+    normalizedPages.length < templateBook.pages.length
+      ? templateBook.pages.slice(normalizedPages.length).map((page) => ({
           ...page,
           elements: page.elements.map((el) => ({ ...el })),
         }))
@@ -74,20 +106,25 @@ export function useMenuStore() {
 
   useEffect(() => {
     const loadStoredBook = async () => {
+      const dynamicDefaultMenu = await buildDynamicDefaultMenu();
+
       try {
         const saved = await menuStorage.getItem<MenuBook>(STORAGE_KEY);
         if (saved) {
-          setMenuBook(migrateLegacyPageBackgrounds(saved));
+          setMenuBook(migrateLegacyPageBackgrounds(saved, dynamicDefaultMenu));
           return;
         }
 
         const legacySaved = localStorage.getItem(LEGACY_STORAGE_KEY);
         if (legacySaved) {
           const parsed = JSON.parse(legacySaved) as MenuBook;
-          const migrated = migrateLegacyPageBackgrounds(parsed);
+          const migrated = migrateLegacyPageBackgrounds(parsed, dynamicDefaultMenu);
           setMenuBook(migrated);
           await menuStorage.setItem(STORAGE_KEY, migrated);
+          return;
         }
+
+        setMenuBook(dynamicDefaultMenu);
       } catch (e) {
         console.error("Failed to load menu", e);
       } finally {
