@@ -1,0 +1,166 @@
+{
+  "name": "Menu ZIP Optimizer + Deployer (Fixed)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "menu-optimizer",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0decc9d6-43d5-4cc6-b589-0f0a562f99d1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "=/tmp/menu-input-{{$execution.id}}.zip",
+        "dataPropertyName": "zipFile"
+      },
+      "id": "518848f7-5f48-4cbd-a52c-a2e4386167ef",
+      "name": "Write Input ZIP",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        430,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 /data/scripts/optimize_menu_zip.py /tmp/menu-input-{{$execution.id}}.zip /tmp/menu-output-{{$execution.id}}.zip /tmp/menu-report-{{$execution.id}}.json"
+      },
+      "id": "595f36ca-ba3d-4d1e-9254-a0e530383fb4",
+      "name": "Optimize ZIP",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        660,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "=/tmp/menu-output-{{$execution.id}}.zip"
+      },
+      "id": "f817d718-05ac-4f0b-9575-0a6dc15b9443",
+      "name": "Read Optimized ZIP",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        890,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oldsummer.vercel.app/api/menu-zip",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "zipFile",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "9ffd30d8-4622-4f6f-974b-b8604d4ad031",
+      "name": "Upload To Menu API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "caec15b3-f182-4c76-a28a-43488d51ef3f",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1350,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Write Input ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Input ZIP": {
+      "main": [
+        [
+          {
+            "node": "Optimize ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optimize ZIP": {
+      "main": [
+        [
+          {
+            "node": "Read Optimized ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Optimized ZIP": {
+      "main": [
+        [
+          {
+            "node": "Upload To Menu API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload To Menu API": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
