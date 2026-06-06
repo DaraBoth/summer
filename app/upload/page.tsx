@@ -1,252 +1,265 @@
-﻿"use client";
+"use client";
 
-import { useMemo, useState } from "react";
-import { convertPdfFileToImages } from "@/lib/pdfToImages";
-import { useMenuStore } from "@/hooks/useMenuStore";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+interface MenuImage {
+  filename: string;
+  originalName: string;
+  uploadedAt: string;
+  url: string;
+}
 
 export default function UploadPage() {
-  const { menuBook, importPdfPagesAsMenu } = useMenuStore();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
-  const [isConverting, setIsConverting] = useState(false);
-  const [isReplacingMenu, setIsReplacingMenu] = useState(false);
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [images, setImages] = useState<MenuImage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadLog, setUploadLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [replacementSummary, setReplacementSummary] = useState<string[]>([]);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const progressText = useMemo(() => {
-    if (!progress) return "";
-    return `Converting page ${progress.current} of ${progress.total}...`;
-  }, [progress]);
+  const fetchImages = useCallback(async () => {
+    try {
+      const res = await fetch("/api/menu-images");
+      const data = (await res.json()) as { images: MenuImage[] };
+      setImages(data.images || []);
+    } catch {
+      setError("Failed to load images from Supabase.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const uploadGuideUrl = "https://www.ilovepdf.com/split_pdf";
+  useEffect(() => {
+    void fetchImages();
+  }, [fetchImages]);
 
-  const onSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
-    if (!selectedFile) {
-      setError("Please select a PDF file first.");
-      return;
+    setUploading(true);
+    setError(null);
+    const log: string[] = [];
+
+    for (const file of Array.from(files)) {
+      log.push(`Uploading ${file.name}…`);
+      setUploadLog([...log]);
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await fetch("/api/menu-images", { method: "POST", body: formData });
+
+      if (res.ok) {
+        log[log.length - 1] = `✓ ${file.name}`;
+      } else {
+        const data = (await res.json()) as { error?: string };
+        log[log.length - 1] = `✗ ${file.name}: ${data.error ?? "failed"}`;
+      }
+
+      setUploadLog([...log]);
     }
 
-    try {
-      setError(null);
-      setSuccessMessage(null);
-      setReplacementSummary([]);
-      setIsConverting(true);
-      setProgress({ current: 0, total: 0 });
+    await fetchImages();
+    setUploading(false);
+    setTimeout(() => setUploadLog([]), 4000);
+  };
 
-      const imagePages = await convertPdfFileToImages(selectedFile, {
-        scale: 1.6,
-        onProgress: (current, total) => setProgress({ current, total }),
-      });
+  const handleDelete = async (filename: string) => {
+    if (!confirm("Delete this image from the menu?")) return;
 
-      importPdfPagesAsMenu(imagePages, selectedFile.name);
+    const res = await fetch(`/api/menu-images?filename=${encodeURIComponent(filename)}`, {
+      method: "DELETE",
+    });
 
-      setSuccessMessage(
-        `Imported ${imagePages.length} pages from ${selectedFile.name}. Your public menu is now updated.`
-      );
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "PDF conversion failed. Try a smaller PDF or fewer pages."
-      );
-    } finally {
-      setIsConverting(false);
+    if (res.ok) {
+      setImages((prev) => prev.filter((img) => img.filename !== filename));
+    } else {
+      setError("Failed to delete image.");
     }
   };
 
-  const onReplaceMenu = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveOrder = async (ordered: MenuImage[]) => {
+    await fetch("/api/menu-images", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order: ordered.map((img) => img.filename) }),
+    });
+  };
 
-    if (!selectedZipFile) {
-      setError("Please select a zip file first.");
-      return;
-    }
+  const onDragStart = (index: number) => {
+    dragIndexRef.current = index;
+  };
 
-    try {
-      setError(null);
-      setSuccessMessage(null);
-      setReplacementSummary([]);
-      setIsReplacingMenu(true);
+  const onDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
 
-      const formData = new FormData();
-      formData.append("zipFile", selectedZipFile);
+  const onDrop = async (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    const fromIndex = dragIndexRef.current;
+    setDragOverIndex(null);
+    dragIndexRef.current = null;
 
-      const response = await fetch("/api/menu-zip", {
-        method: "POST",
-        body: formData,
-      });
+    if (fromIndex === null || fromIndex === toIndex) return;
 
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        error?: string;
-        replacedFiles?: string[];
-      };
+    const reordered = [...images];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setImages(reordered);
+    await saveOrder(reordered);
+  };
 
-      if (!response.ok) {
-        throw new Error(payload.error || "Failed to replace public/menu from the zip file.");
-      }
-
-      setSuccessMessage(
-        payload.message || `Replaced public/menu using ${selectedZipFile.name}.`
-      );
-      setReplacementSummary(payload.replacedFiles || []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to replace public/menu from the zip file.");
-    } finally {
-      setIsReplacingMenu(false);
-    }
+  const onDragEnd = () => {
+    setDragOverIndex(null);
+    dragIndexRef.current = null;
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(183,118,47,0.18),transparent_30%),linear-gradient(180deg,var(--bg-secondary),#0b0b0b)] p-6 md:p-10">
-      <div className="mx-auto max-w-5xl space-y-6 rounded-[2rem] border border-[var(--border-light)] bg-white/95 p-6 shadow-2xl shadow-black/30 backdrop-blur md:p-8">
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-black/10 bg-[linear-gradient(180deg,#fff9f0,#fff3e3)] p-6 text-[var(--text-main)] shadow-lg">
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--accent-forest)]">Menu Replacer Workflow</p>
-            <h1 className="mt-3 font-menu-title text-4xl text-[var(--accent-dark)] md:text-5xl">
-              Upload a split menu zip and replace <span className="text-[var(--accent-forest)]">public/menu</span>
+    <main className="min-h-screen bg-[var(--bg-secondary)] p-6 md:p-10">
+      <div className="mx-auto max-w-5xl space-y-8">
+
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--accent-forest)]">
+              Admin Panel
+            </p>
+            <h1 className="mt-1 font-menu-title text-4xl text-[var(--accent-dark)]">
+              Menu Image Manager
             </h1>
-            <p className="mt-4 max-w-2xl font-body text-sm leading-7 text-[var(--text-muted)]">
-              First split your PDF at{" "}
-              <a
-                className="font-bold text-[var(--accent-forest)] underline decoration-[var(--accent-forest)]/40 underline-offset-4"
-                href={uploadGuideUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                ilovepdf.com/split_pdf
-              </a>{" "}
-              after naming the source file menu. Download the split result as menu.zip, then upload it here to overwrite the files currently served from /public/menu.
+            <p className="mt-2 font-body text-sm text-[var(--text-muted)]">
+              Upload images, drag to reorder, and delete. Changes are immediately live on the public menu.
             </p>
-
-            <div className="mt-6 grid gap-3 text-sm text-[var(--text-main)] sm:grid-cols-3">
-              <div className="rounded-2xl border border-black/10 bg-white/75 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">Step 1</p>
-                <p className="mt-1 text-[var(--text-main)]">Rename the PDF to <span className="font-bold">menu</span>.</p>
-              </div>
-              <div className="rounded-2xl border border-black/10 bg-white/75 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">Step 2</p>
-                <p className="mt-1 text-[var(--text-main)]">Use the split PDF site to generate the zip.</p>
-              </div>
-              <div className="rounded-2xl border border-black/10 bg-white/75 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">Step 3</p>
-                <p className="mt-1 text-[var(--text-main)]">Upload menu.zip here to replace the menu assets.</p>
-              </div>
-            </div>
           </div>
-
-          <div className="rounded-[1.5rem] border border-[var(--border-light)] bg-[var(--bg-secondary)] p-6 text-[var(--text-main)] shadow-lg">
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--accent-forest)]">About GitHub deploys</p>
-            <p className="mt-3 font-body text-sm leading-7 text-[var(--text-muted)]">
-              This page replaces the live files under <span className="font-semibold text-[var(--text-main)]">public/menu</span> on the server.
-              Pushing those files into GitHub automatically needs a separate GitHub Action, token, or self-hosted script with repo write access.
-            </p>
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-[var(--text-muted)]">
-              If you want, this can be extended later with a commit step, but the safest default is direct replacement only.
-            </div>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a href="/menu-replacer" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
-                Menu Replacer Guide
-              </a>
-              <a href="/split" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
-                Open Split Tool
-              </a>
-              <a href="/edit" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
-                Go To Editor
-              </a>
-              <a href="/" target="_blank" rel="noreferrer" className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
-                Open Public Menu
-              </a>
-            </div>
+          <div className="flex gap-3">
+            <a
+              href="/"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]"
+            >
+              View Menu
+            </a>
+            <a
+              href="/edit"
+              className="rounded-full border border-[var(--accent-forest)]/30 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]"
+            >
+              Editor
+            </a>
           </div>
-        </section>
+        </div>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <form onSubmit={onSubmit} className="rounded-[1.5rem] border border-black/10 bg-[var(--bg-secondary)] p-6 shadow-lg">
-            <h2 className="font-menu-title text-2xl text-[var(--accent-dark)]">Convert PDF to Menu Images</h2>
-            <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-              Keep this for the browser-based flow that imports a PDF and converts each page into menu images.
-            </p>
-            <div className="mt-6 space-y-5">
-              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">
-                Select PDF File
-              </label>
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-[var(--text-main)]"
-              />
+        {/* Upload drop zone */}
+        <div
+          className="rounded-[1.5rem] border-2 border-dashed border-[var(--accent-forest)]/40 bg-white/5 p-10 text-center transition cursor-pointer hover:border-[var(--accent-forest)]/70 hover:bg-white/[0.07]"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            void handleUpload(e.dataTransfer.files);
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => void handleUpload(e.target.files)}
+          />
+          <p className="mb-1 font-menu-title text-2xl text-[var(--accent-dark)]">
+            + Drop images here or click to upload
+          </p>
+          <p className="font-body text-xs text-[var(--text-muted)]">
+            PNG, JPG, WEBP — select multiple files at once
+          </p>
 
-              <button
-                type="submit"
-                disabled={isConverting}
-                className="rounded-full bg-[var(--accent-forest)] px-6 py-3 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60"
-              >
-                {isConverting ? "Converting..." : "Convert PDF And Apply"}
-              </button>
+          {uploadLog.length > 0 && (
+            <div className="mt-5 space-y-1">
+              {uploadLog.map((msg, i) => (
+                <p key={i} className="font-body text-xs text-[var(--accent-forest)]">
+                  {msg}
+                </p>
+              ))}
             </div>
-          </form>
+          )}
 
-          <form onSubmit={onReplaceMenu} className="rounded-[1.5rem] border border-black/10 bg-[var(--bg-secondary)] p-6 shadow-lg">
-            <h2 className="font-menu-title text-2xl text-[var(--accent-dark)]">Replace public/menu from Zip</h2>
-            <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-              Upload menu.zip here. The server will unzip it, clear the current menu folder, and write the new files into public/menu.
+          {uploading && uploadLog.length === 0 && (
+            <p className="mt-4 font-body text-xs text-[var(--text-muted)] animate-pulse">
+              Uploading…
             </p>
+          )}
+        </div>
 
-            <div className="mt-6 space-y-5">
-              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">
-                Select Zip File
-              </label>
-              <input
-                type="file"
-                accept=".zip,application/zip,application/x-zip-compressed"
-                onChange={(e) => setSelectedZipFile(e.target.files?.[0] || null)}
-                className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-[var(--text-main)]"
-              />
+        {error && (
+          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            {error}
+          </p>
+        )}
 
-              <button
-                type="submit"
-                disabled={isReplacingMenu}
-                className="rounded-full bg-[var(--accent-dark)] px-6 py-3 text-xs font-bold uppercase tracking-widest text-[var(--bg-secondary)] disabled:opacity-60"
-              >
-                {isReplacingMenu ? "Replacing..." : "Replace Public Menu"}
-              </button>
-            </div>
-          </form>
-        </section>
+        {/* Image grid */}
+        {isLoading ? (
+          <p className="py-16 text-center font-body text-sm text-[var(--text-muted)] animate-pulse">
+            Loading images…
+          </p>
+        ) : images.length === 0 ? (
+          <div className="rounded-[1.5rem] border border-[var(--border-light)] bg-white/5 py-16 text-center">
+            <p className="font-menu-title text-xl text-[var(--accent-dark)]">No images yet</p>
+            <p className="mt-2 font-body text-sm text-[var(--text-muted)]">
+              Upload your first menu page image above.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="mb-4 font-body text-[10px] uppercase tracking-[0.3em] text-[var(--accent-forest)]">
+              {images.length} page{images.length !== 1 ? "s" : ""} — drag to reorder
+            </p>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {images.map((img, index) => (
+                <div
+                  key={img.filename}
+                  draggable
+                  onDragStart={() => onDragStart(index)}
+                  onDragOver={(e) => onDragOver(e, index)}
+                  onDrop={(e) => void onDrop(e, index)}
+                  onDragEnd={onDragEnd}
+                  className={`group relative cursor-grab overflow-hidden rounded-xl border transition active:cursor-grabbing active:opacity-60 ${
+                    dragOverIndex === index
+                      ? "scale-105 border-[var(--accent-forest)] shadow-lg shadow-[var(--accent-forest)]/20"
+                      : "border-[var(--border-light)]"
+                  }`}
+                >
+                  {/* Page number */}
+                  <div className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-dark)]">
+                    {index + 1}
+                  </div>
 
-        {progress && isConverting && <p className="text-sm text-[var(--accent-forest)]">{progressText}</p>}
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete(img.filename);
+                    }}
+                    className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100"
+                  >
+                    ×
+                  </button>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+                  <img
+                    src={img.url}
+                    alt={`Menu page ${index + 1}`}
+                    draggable={false}
+                    className="block h-auto w-full object-cover"
+                    style={{ aspectRatio: "3/4" }}
+                  />
 
-        {successMessage && <p className="text-sm text-[var(--accent-forest)]">{successMessage}</p>}
-
-        {replacementSummary.length > 0 && (
-          <section className="rounded-[1.5rem] border border-black/10 bg-[var(--bg-secondary)] p-6 shadow-lg">
-            <h2 className="font-menu-title text-xl text-[var(--accent-dark)]">Replaced Files</h2>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {replacementSummary.slice(0, 12).map((item) => (
-                <div key={item} className="truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-[var(--text-muted)]">
-                  {item}
+                  <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20 pointer-events-none" />
                 </div>
               ))}
             </div>
-          </section>
-        )}
-
-        {menuBook.sourcePdf && (
-          <div className="rounded-[1.5rem] border border-black/10 bg-[var(--bg-secondary)] p-6 shadow-lg">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-forest)]">Last Imported PDF</p>
-            <p className="mt-2 font-body text-sm text-[var(--text-main)]">{menuBook.sourcePdf.name}</p>
-            <p className="mt-1 font-body text-xs text-[var(--text-muted)]">
-              {menuBook.sourcePdf.pageCount} pages - Imported {new Date(menuBook.sourcePdf.importedAt).toLocaleString()}
-            </p>
           </div>
         )}
       </div>

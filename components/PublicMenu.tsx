@@ -1,22 +1,63 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import VerticalMenuScroll from "@/components/VerticalMenuScroll";
-import { useMenuStore } from "@/hooks/useMenuStore";
+import { MenuBook } from "@/types/menu";
 
 interface PublicMenuProps {
   initialPage: number;
 }
 
-export default function PublicMenu({ initialPage }: PublicMenuProps) {
-  const { menuBook, isLoaded } = useMenuStore();
+interface MenuImage {
+  filename: string;
+  url: string;
+}
 
-  if (!isLoaded) {
+function buildMenuBook(images: MenuImage[]): MenuBook {
+  return {
+    restaurantName: "Summer Menu",
+    restaurantNameKh: "ម៉ឺនុយSummer",
+    tagline: "Quality Experience & Professional Service",
+    pages: images.map((img, index) => ({
+      id: `supabase-${index}`,
+      type: "content" as const,
+      title: `Page ${index + 1}`,
+      elements: [
+        {
+          id: `bg-${index}`,
+          type: "image" as const,
+          position: { x: 0, y: 0, width: 100, height: 100, zIndex: 0 },
+          imageUrl: img.url,
+        },
+      ],
+    })),
+    inventory: [],
+  };
+}
+
+export default function PublicMenu({ initialPage }: PublicMenuProps) {
+  const [menuBook, setMenuBook] = useState<MenuBook | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/menu-images", { cache: "no-store" });
+        const data = (await res.json()) as { images: MenuImage[] };
+        setMenuBook(buildMenuBook(data.images || []));
+      } catch {
+        setMenuBook(buildMenuBook([]));
+      }
+    };
+    void load();
+  }, []);
+
+  if (!menuBook) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#050505]">
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
-            {menuBook.restaurantName || "Le Jardin d'Or"}
-          </div> 
+            Summer Menu
+          </div>
           <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
             Opening your menu...
           </p>
