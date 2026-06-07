@@ -37,15 +37,18 @@ function buildMenuBook(images: MenuImage[]): MenuBook {
 
 export default function PublicMenu({ initialPage }: PublicMenuProps) {
   const [menuBook, setMenuBook] = useState<MenuBook | null>(null);
-  const [hostname, setHostname] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
   useEffect(() => {
-    setHostname(window.location.hostname);
-
     const load = async () => {
       try {
-        const res = await fetch("/api/menu-images", { cache: "no-store" });
-        const data = (await res.json()) as { images: MenuImage[] };
+        const [channelRes, imagesRes] = await Promise.all([
+          fetch("/api/channel"),
+          fetch("/api/menu-images", { cache: "no-store" }),
+        ]);
+        const { channel } = (await channelRes.json()) as { channel: string };
+        const data = (await imagesRes.json()) as { images: MenuImage[] };
+        setDisplayName(channel ? channel.charAt(0).toUpperCase() + channel.slice(1) : "");
         setMenuBook(buildMenuBook(data.images || []));
       } catch {
         setMenuBook(buildMenuBook([]));
@@ -59,7 +62,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
       <div className="min-h-screen flex items-center justify-center bg-[#050505]">
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
-            {hostname}
+            {displayName}
           </div>
           <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
             Opening your menu...
