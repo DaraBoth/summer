@@ -6,7 +6,7 @@ export const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-export const MENU_BUCKET = "menu";
+export const MENU_BUCKET = process.env.SUPABASE_BUCKET ?? "menu";
 export const MANIFEST_KEY = "_manifest.json";
 
 export interface ManifestEntry {
