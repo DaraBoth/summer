@@ -3,7 +3,9 @@ import { v4 as uuidv4 } from "uuid";
 import {
   supabaseAdmin,
   MENU_BUCKET,
+  CHANNEL,
   getPublicUrl,
+  getStoragePath,
   readManifest,
   writeManifest,
   ManifestEntry,
@@ -11,7 +13,13 @@ import {
 
 export const runtime = "nodejs";
 
+function channelRequired() {
+  return NextResponse.json({ error: "CHANNEL env var is not configured." }, { status: 500 });
+}
+
 export async function GET() {
+  if (!CHANNEL) return channelRequired();
+
   try {
     const manifest = await readManifest();
     const images = manifest.images.map((entry) => ({
@@ -25,6 +33,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!CHANNEL) return channelRequired();
+
   try {
     const formData = await request.formData();
     const file = formData.get("image");
@@ -39,7 +49,7 @@ export async function POST(request: Request) {
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from(MENU_BUCKET)
-      .upload(filename, buffer, {
+      .upload(getStoragePath(filename), buffer, {
         contentType: file.type || "image/png",
         upsert: false,
       });
@@ -72,6 +82,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!CHANNEL) return channelRequired();
+
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename");
@@ -80,7 +92,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
     }
 
-    await supabaseAdmin.storage.from(MENU_BUCKET).remove([filename]);
+    await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(filename)]);
 
     const manifest = await readManifest();
     manifest.images = manifest.images.filter((e) => e.filename !== filename);
@@ -96,6 +108,8 @@ export async function DELETE(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (!CHANNEL) return channelRequired();
+
   try {
     const body = (await request.json()) as { order: string[] };
 

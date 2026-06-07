@@ -11,6 +11,7 @@ interface MenuImage {
 
 export default function UploadPage() {
   const [images, setImages] = useState<MenuImage[]>([]);
+  const [channel, setChannel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadLog, setUploadLog] = useState<string[]>([]);
@@ -21,8 +22,13 @@ export default function UploadPage() {
 
   const fetchImages = useCallback(async () => {
     try {
-      const res = await fetch("/api/menu-images");
-      const data = (await res.json()) as { images: MenuImage[] };
+      const [channelRes, imagesRes] = await Promise.all([
+        fetch("/api/channel"),
+        fetch("/api/menu-images"),
+      ]);
+      const { channel: ch } = (await channelRes.json()) as { channel: string };
+      const data = (await imagesRes.json()) as { images: MenuImage[] };
+      setChannel(ch ?? "");
       setImages(data.images || []);
     } catch {
       setError("Failed to load images from Supabase.");
@@ -126,6 +132,11 @@ export default function UploadPage() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--accent-forest)]">
               Admin Panel
+              {channel && (
+                <span className="ml-3 rounded-full border border-[var(--accent-forest)]/40 px-2 py-0.5 text-[9px] tracking-widest text-[var(--accent-dark)]">
+                  {channel}
+                </span>
+              )}
             </p>
             <h1 className="mt-1 font-menu-title text-4xl text-[var(--accent-dark)]">
               Menu Image Manager

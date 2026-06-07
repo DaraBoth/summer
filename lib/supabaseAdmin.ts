@@ -6,8 +6,9 @@ export const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-export const MENU_BUCKET = process.env.SUPABASE_BUCKET ?? "menu";
-export const MANIFEST_KEY = "_manifest.json";
+export const MENU_BUCKET = "menu";
+export const CHANNEL = process.env.CHANNEL ?? "";
+export const MANIFEST_KEY = `${CHANNEL}/_manifest.json`;
 
 export interface ManifestEntry {
   filename: string;
@@ -19,11 +20,17 @@ export interface MenuManifest {
   images: ManifestEntry[];
 }
 
+export function getStoragePath(filename: string): string {
+  return `${CHANNEL}/${filename}`;
+}
+
 export function getPublicUrl(filename: string): string {
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${MENU_BUCKET}/${filename}`;
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${MENU_BUCKET}/${CHANNEL}/${filename}`;
 }
 
 export async function readManifest(): Promise<MenuManifest> {
+  if (!CHANNEL) return { images: [] };
+
   const { data, error } = await supabaseAdmin.storage
     .from(MENU_BUCKET)
     .download(MANIFEST_KEY);
@@ -39,6 +46,8 @@ export async function readManifest(): Promise<MenuManifest> {
 }
 
 export async function writeManifest(manifest: MenuManifest): Promise<void> {
+  if (!CHANNEL) throw new Error("CHANNEL env var is not set");
+
   const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
   const { error } = await supabaseAdmin.storage
     .from(MENU_BUCKET)
