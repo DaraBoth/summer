@@ -1,0 +1,142 @@
+{
+  "name": "PDF to PNG ZIP (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pdf-to-png",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2f0d9d9e-5f8a-4a83-ab01-ebd9227ed9b8",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "=/tmp/pdf-input-{{$execution.id}}.pdf",
+        "dataPropertyName": "pdfFile"
+      },
+      "id": "8509a39d-c649-4a3b-9f52-0a082d79a708",
+      "name": "Write Input PDF",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 /data/scripts/pdf_to_png_zip.py /tmp/pdf-input-{{$execution.id}}.pdf /tmp/pdf-pages-{{$execution.id}}.zip /tmp/pdf-pages-report-{{$execution.id}}.json"
+      },
+      "id": "f67f9064-8dfd-4f81-8fe3-6ca7fd43db71",
+      "name": "Convert PDF Pages",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "=/tmp/pdf-pages-{{$execution.id}}.zip"
+      },
+      "id": "f531b3f2-8f59-4c78-8ca8-c8b90406ec38",
+      "name": "Read Output ZIP",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "responseBody": "",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/zip"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=menu-pages.zip"
+              }
+            ]
+          }
+        },
+        "binaryPropertyName": "data"
+      },
+      "id": "9c9912fe-a0bd-4469-bf87-a2bf6dd8fa00",
+      "name": "Respond ZIP Download",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Write Input PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Input PDF": {
+      "main": [
+        [
+          {
+            "node": "Convert PDF Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert PDF Pages": {
+      "main": [
+        [
+          {
+            "node": "Read Output ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Output ZIP": {
+      "main": [
+        [
+          {
+            "node": "Respond ZIP Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
