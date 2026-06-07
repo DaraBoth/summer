@@ -76,15 +76,98 @@ async function compressImage(file: File): Promise<File> {
   });
 }
 
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+interface LightboxProps {
+  images: MenuImage[];
+  index: number;
+  onClose: () => void;
+  onNav: (index: number) => void;
+}
+
+function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
+  const img = images[index];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && index > 0) onNav(index - 1);
+      if (e.key === "ArrowRight" && index < images.length - 1) onNav(index + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, images.length, onClose, onNav]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onClose}
+        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20"
+      >
+        ×
+      </button>
+
+      {/* Page counter */}
+      <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-dark)]">
+        {index + 1} / {images.length}
+      </div>
+
+      {/* Prev */}
+      {index > 0 && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onNav(index - 1); }}
+          className="absolute left-3 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20 md:left-6"
+        >
+          ‹
+        </button>
+      )}
+
+      {/* Next */}
+      {index < images.length - 1 && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onNav(index + 1); }}
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20 md:right-6"
+        >
+          ›
+        </button>
+      )}
+
+      {/* Image */}
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[88vh] max-w-[88vw] flex-col items-center"
+      >
+        <img
+          src={img.url}
+          alt={`Menu page ${index + 1}`}
+          className="max-h-[80vh] max-w-[84vw] rounded-xl object-contain shadow-2xl"
+        />
+        <p className="mt-3 font-body text-[11px] text-[var(--text-muted)]">
+          {img.originalName}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sortable card ────────────────────────────────────────────────────────────
 
 interface SortableCardProps {
   img: MenuImage;
   index: number;
   onDelete: (filename: string) => void;
+  onPreview: (index: number) => void;
 }
 
-function SortableCard({ img, index, onDelete }: SortableCardProps) {
+function SortableCard({ img, index, onDelete, onPreview }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: img.filename });
 
@@ -98,7 +181,7 @@ function SortableCard({ img, index, onDelete }: SortableCardProps) {
           : "border-[var(--border-light)]"
       }`}
     >
-      {/* Drag handle — touch-friendly target */}
+      {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
@@ -110,14 +193,26 @@ function SortableCard({ img, index, onDelete }: SortableCardProps) {
         {index + 1}
       </div>
 
-      {/* Delete button — sits above drag handle */}
+      {/* Delete button */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => onDelete(img.filename)}
         className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white opacity-0 transition group-hover:opacity-100 md:h-6 md:w-6 md:text-xs"
-        style={{ opacity: undefined }}
       >
         ×
+      </button>
+
+      {/* Preview button */}
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => onPreview(index)}
+        className="absolute bottom-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100 md:h-6 md:w-6"
+        title="Preview"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+          <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+        </svg>
       </button>
 
       <img
@@ -140,6 +235,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadLog, setUploadLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -339,7 +435,13 @@ export default function UploadPage() {
               <SortableContext items={images.map((img) => img.filename)} strategy={rectSortingStrategy}>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                   {images.map((img, index) => (
-                    <SortableCard key={img.filename} img={img} index={index} onDelete={handleDelete} />
+                    <SortableCard
+                      key={img.filename}
+                      img={img}
+                      index={index}
+                      onDelete={handleDelete}
+                      onPreview={setPreviewIndex}
+                    />
                   ))}
                 </div>
               </SortableContext>
@@ -347,6 +449,16 @@ export default function UploadPage() {
           </div>
         )}
       </div>
+
+      {/* Lightbox */}
+      {previewIndex !== null && (
+        <Lightbox
+          images={images}
+          index={previewIndex}
+          onClose={() => setPreviewIndex(null)}
+          onNav={setPreviewIndex}
+        />
+      )}
     </main>
   );
 }
