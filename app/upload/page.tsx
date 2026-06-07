@@ -145,6 +145,18 @@ export default function UploadPage() {
     setTimeout(() => setUploadLog([]), 4000);
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm(`Remove all ${images.length} images? This cannot be undone.`)) return;
+
+    const res = await fetch("/api/menu-images?all=true", { method: "DELETE" });
+
+    if (res.ok) {
+      setImages([]);
+    } else {
+      setError("Failed to remove all images.");
+    }
+  };
+
   const handleDelete = async (filename: string) => {
     if (!confirm("Delete this image from the menu?")) return;
 
@@ -298,9 +310,17 @@ export default function UploadPage() {
           </div>
         ) : (
           <div>
-            <p className="mb-4 font-body text-[10px] uppercase tracking-[0.3em] text-[var(--accent-forest)]">
-              {images.length} page{images.length !== 1 ? "s" : ""} — drag to reorder
-            </p>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="font-body text-[10px] uppercase tracking-[0.3em] text-[var(--accent-forest)]">
+                {images.length} page{images.length !== 1 ? "s" : ""} — drag to reorder
+              </p>
+              <button
+                onClick={() => void handleDeleteAll()}
+                className="rounded-full border border-red-500/40 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-400 transition hover:bg-red-500/10"
+              >
+                Remove All
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {images.map((img, index) => (
                 <div

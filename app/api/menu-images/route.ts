@@ -86,7 +86,18 @@ export async function DELETE(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
+    const all = searchParams.get("all");
     const filename = searchParams.get("filename");
+
+    if (all === "true") {
+      const manifest = await readManifest();
+      const paths = manifest.images.map((e) => getStoragePath(e.filename));
+      if (paths.length > 0) {
+        await supabaseAdmin.storage.from(MENU_BUCKET).remove(paths);
+      }
+      await writeManifest({ images: [] });
+      return NextResponse.json({ ok: true, removed: paths.length });
+    }
 
     if (!filename) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
