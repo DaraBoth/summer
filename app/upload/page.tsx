@@ -9,6 +9,62 @@ interface MenuImage {
   url: string;
 }
 
+const MAX_PX = 1920;
+const JPEG_QUALITY = 0.85;
+
+function formatKB(bytes: number): string {
+  return bytes < 1024 * 1024
+    ? `${Math.round(bytes / 1024)}KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+async function compressImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+      const needsResize = width > MAX_PX || height > MAX_PX;
+
+      if (!needsResize) {
+        resolve(file);
+        return;
+      }
+
+      if (width >= height) {
+        height = Math.round((height / width) * MAX_PX);
+        width = MAX_PX;
+      } else {
+        width = Math.round((width / height) * MAX_PX);
+        height = MAX_PX;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas not supported")); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error("Compression failed")); return; }
+          const name = file.name.replace(/\.[^.]+$/, ".jpg");
+          resolve(new File([blob], name, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        JPEG_QUALITY
+      );
+    };
+
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = url;
+  });
+}
+
 export default function UploadPage() {
   const [images, setImages] = useState<MenuImage[]>([]);
   const [channel, setChannel] = useState<string>("");
@@ -49,16 +105,33 @@ export default function UploadPage() {
     const log: string[] = [];
 
     for (const file of Array.from(files)) {
-      log.push(`Uploading ${file.name}…`);
+      log.push(`Compressing ${file.name}…`);
+      setUploadLog([...log]);
+
+      let compressed: File;
+      try {
+        compressed = await compressImage(file);
+      } catch {
+        log[log.length - 1] = `✗ ${file.name}: compression failed`;
+        setUploadLog([...log]);
+        continue;
+      }
+
+      const sizeNote =
+        compressed.size < file.size
+          ? ` ${formatKB(file.size)} → ${formatKB(compressed.size)}`
+          : ` ${formatKB(file.size)}`;
+
+      log[log.length - 1] = `Uploading ${compressed.name}${sizeNote}…`;
       setUploadLog([...log]);
 
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("image", compressed);
 
       const res = await fetch("/api/menu-images", { method: "POST", body: formData });
 
       if (res.ok) {
-        log[log.length - 1] = `✓ ${file.name}`;
+        log[log.length - 1] = `✓ ${compressed.name}${sizeNote}`;
       } else {
         const data = (await res.json()) as { error?: string };
         log[log.length - 1] = `✗ ${file.name}: ${data.error ?? "failed"}`;
