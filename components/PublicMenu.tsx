@@ -13,10 +13,14 @@ interface MenuImage {
   url: string;
 }
 
-function buildMenuBook(images: MenuImage[]): MenuBook {
+function buildMenuBook(images: MenuImage[], channel: string): MenuBook {
+  const displayName = channel
+    ? channel.charAt(0).toUpperCase() + channel.slice(1) + " Menu"
+    : "Menu";
+
   return {
-    restaurantName: "Summer Menu",
-    restaurantNameKh: "ម៉ឺនុយSummer",
+    restaurantName: displayName,
+    restaurantNameKh: "",
     tagline: "Quality Experience & Professional Service",
     pages: images.map((img, index) => ({
       id: `supabase-${index}`,
@@ -37,26 +41,36 @@ function buildMenuBook(images: MenuImage[]): MenuBook {
 
 export default function PublicMenu({ initialPage }: PublicMenuProps) {
   const [menuBook, setMenuBook] = useState<MenuBook | null>(null);
+  const [channel, setChannel] = useState<string>("");
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/menu-images", { cache: "no-store" });
-        const data = (await res.json()) as { images: MenuImage[] };
-        setMenuBook(buildMenuBook(data.images || []));
+        const [channelRes, imagesRes] = await Promise.all([
+          fetch("/api/channel"),
+          fetch("/api/menu-images", { cache: "no-store" }),
+        ]);
+        const { channel: ch } = (await channelRes.json()) as { channel: string };
+        const data = (await imagesRes.json()) as { images: MenuImage[] };
+        setChannel(ch ?? "");
+        setMenuBook(buildMenuBook(data.images || [], ch ?? ""));
       } catch {
-        setMenuBook(buildMenuBook([]));
+        setMenuBook(buildMenuBook([], ""));
       }
     };
     void load();
   }, []);
+
+  const displayName = channel
+    ? channel.charAt(0).toUpperCase() + channel.slice(1) + " Menu"
+    : "Menu";
 
   if (!menuBook) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#050505]">
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
-            Summer Menu
+            {displayName}
           </div>
           <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
             Opening your menu...
