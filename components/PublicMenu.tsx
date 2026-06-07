@@ -13,21 +13,9 @@ interface MenuImage {
   url: string;
 }
 
-function getSiteDisplayName(): string {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (siteUrl) {
-    try {
-      return new URL(siteUrl).hostname;
-    } catch {}
-  }
-  return "";
-}
-
-const SITE_DISPLAY_NAME = getSiteDisplayName();
-
 function buildMenuBook(images: MenuImage[]): MenuBook {
   return {
-    restaurantName: SITE_DISPLAY_NAME,
+    restaurantName: "",
     restaurantNameKh: "",
     tagline: "",
     pages: images.map((img, index) => ({
@@ -49,8 +37,11 @@ function buildMenuBook(images: MenuImage[]): MenuBook {
 
 export default function PublicMenu({ initialPage }: PublicMenuProps) {
   const [menuBook, setMenuBook] = useState<MenuBook | null>(null);
+  const [hostname, setHostname] = useState("");
 
   useEffect(() => {
+    setHostname(window.location.hostname);
+
     const load = async () => {
       try {
         const res = await fetch("/api/menu-images", { cache: "no-store" });
@@ -68,7 +59,7 @@ export default function PublicMenu({ initialPage }: PublicMenuProps) {
       <div className="min-h-screen flex items-center justify-center bg-[#050505]">
         <div className="text-center">
           <div className="font-menu-title text-3xl mb-2 animate-pulse text-[var(--accent-dark)]">
-            {SITE_DISPLAY_NAME}
+            {hostname}
           </div>
           <p className="font-body text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
             Opening your menu...
