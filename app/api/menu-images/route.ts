@@ -27,8 +27,14 @@ export async function GET() {
       url: getPublicUrl(entry.filename),
     }));
     return NextResponse.json({ images });
-  } catch {
-    return NextResponse.json({ images: [] }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        images: [],
+        error: error instanceof Error ? error.message : "Failed to read menu images",
+      },
+      { status: 500 }
+    );
   }
 }
 

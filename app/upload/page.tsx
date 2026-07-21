@@ -252,11 +252,19 @@ export default function UploadPage() {
         fetch("/api/menu-images"),
       ]);
       const { channel: ch } = (await channelRes.json()) as { channel: string };
-      const data = (await imagesRes.json()) as { images: MenuImage[] };
+      const data = (await imagesRes.json()) as { images: MenuImage[]; error?: string };
       setChannel(ch ?? "");
+
+      // A failed read must not look like an empty menu.
+      if (!imagesRes.ok) {
+        setError(data.error ?? `Failed to load images (HTTP ${imagesRes.status}).`);
+        return;
+      }
+
+      setError(null);
       setImages(data.images || []);
-    } catch {
-      setError("Failed to load images from Supabase.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load images from Supabase.");
     } finally {
       setIsLoading(false);
     }
@@ -265,11 +273,21 @@ export default function UploadPage() {
   useEffect(() => { void fetchImages(); }, [fetchImages]);
 
   const saveOrder = async (ordered: MenuImage[]) => {
-    await fetch("/api/menu-images", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order: ordered.map((img) => img.filename) }),
-    });
+    try {
+      const res = await fetch("/api/menu-images", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: ordered.map((img) => img.filename) }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? `Failed to save order (HTTP ${res.status}).`);
+        return;
+      }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save order.");
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -312,13 +330,27 @@ export default function UploadPage() {
 
       const formData = new FormData();
       formData.append("image", compressed);
-      const res = await fetch("/api/menu-images", { method: "POST", body: formData });
+      try {
+        const res = await fetch("/api/menu-images", { method: "POST", body: formData });
 
-      if (res.ok) {
-        log[log.length - 1] = `✓ ${compressed.name}${sizeNote}`;
-      } else {
-        const data = (await res.json()) as { error?: string };
-        log[log.length - 1] = `✗ ${file.name}: ${data.error ?? "failed"}`;
+        if (res.ok) {
+          log[log.length - 1] = `✓ ${compressed.name}${sizeNote}`;
+        } else {
+          // Show what the server actually said, not a generic failure.
+          const body = await res.text();
+          let detail = body.slice(0, 200);
+          try {
+            detail = (JSON.parse(body) as { error?: string }).error ?? detail;
+          } catch {
+            /* not JSON — keep the raw body */
+          }
+          log[log.length - 1] = `✗ ${file.name}: HTTP ${res.status} — ${detail}`;
+          setError(detail);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "network error";
+        log[log.length - 1] = `✗ ${file.name}: ${msg}`;
+        setError(msg);
       }
       setUploadLog([...log]);
     }
@@ -336,7 +368,8 @@ export default function UploadPage() {
     if (res.ok) {
       setImages((prev) => prev.filter((img) => img.filename !== filename));
     } else {
-      setError("Failed to delete image.");
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? `Failed to delete image (HTTP ${res.status}).`);
     }
   };
 
@@ -346,7 +379,8 @@ export default function UploadPage() {
     if (res.ok) {
       setImages([]);
     } else {
-      setError("Failed to remove all images.");
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? `Failed to remove all images (HTTP ${res.status}).`);
     }
   };
 
