@@ -31,45 +31,17 @@ export function getPublicUrl(filename: string): string {
 export async function readManifest(): Promise<MenuManifest> {
   if (!CHANNEL) return { images: [] };
 
-  // Deliberately not supabaseAdmin.storage.download(): that path is served by the
-  // storage CDN and keeps returning a stale body after a write, so every
-  // read-modify-write below would rebase onto an outdated manifest and drop the
-  // previous writer's entries. A unique query string bypasses the cache.
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const bust = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${MENU_BUCKET}/${MANIFEST_KEY}?cb=${bust}`,
-    {
-      headers: { Authorization: `Bearer ${key}`, apikey: key, "cache-control": "no-cache" },
-      cache: "no-store",
-    }
-  );
+  const { data, error } = await supabaseAdmin.storage
+    .from(MENU_BUCKET)
+    .download(MANIFEST_KEY);
 
-  const text = await res.text();
-
-  // Only a genuinely absent manifest may be treated as empty. Any other failure
-  // must propagate: callers write the result straight back, so returning an empty
-  // manifest on a transient error erases the whole menu.
-  if (!res.ok) {
-    // Storage answers a missing object with 400 and a not_found payload, not 404.
-    let missing = res.status === 404;
-    if (!missing && res.status === 400) {
-      try {
-        const body = JSON.parse(text) as { error?: string; statusCode?: string };
-        missing = body.error === "not_found" || body.statusCode === "404";
-      } catch {
-        missing = false;
-      }
-    }
-    if (missing) return { images: [] };
-    throw new Error(`Failed to read manifest: ${res.status} ${text.slice(0, 200)}`);
-  }
+  if (error || !data) return { images: [] };
 
   try {
-    const parsed = JSON.parse(text) as MenuManifest;
-    return { images: Array.isArray(parsed.images) ? parsed.images : [] };
+    const text = await data.text();
+    return JSON.parse(text) as MenuManifest;
   } catch {
-    throw new Error("Manifest is not valid JSON; refusing to overwrite it.");
+    return { images: [] };
   }
 }
 
@@ -79,11 +51,7 @@ export async function writeManifest(manifest: MenuManifest): Promise<void> {
   const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
   const { error } = await supabaseAdmin.storage
     .from(MENU_BUCKET)
-    .upload(MANIFEST_KEY, blob, {
-      upsert: true,
-      contentType: "application/json",
-      cacheControl: "0",
-    });
+    .upload(MANIFEST_KEY, blob, { upsert: true, contentType: "application/json" });
 
   if (error) throw new Error(`Failed to write manifest: ${error.message}`);
 }
