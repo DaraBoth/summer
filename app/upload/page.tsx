@@ -165,9 +165,10 @@ interface SortableCardProps {
   index: number;
   onDelete: (filename: string) => void;
   onPreview: (index: number) => void;
+  onReplace: (filename: string) => void;
 }
 
-function SortableCard({ img, index, onDelete, onPreview }: SortableCardProps) {
+function SortableCard({ img, index, onDelete, onPreview, onReplace }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: img.filename });
 
@@ -200,6 +201,19 @@ function SortableCard({ img, index, onDelete, onPreview }: SortableCardProps) {
         className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white opacity-0 transition group-hover:opacity-100 md:h-6 md:w-6 md:text-xs"
       >
         ×
+      </button>
+
+      {/* Replace button — swaps the file, keeps the page number */}
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => onReplace(img.filename)}
+        className="absolute bottom-2 left-2 z-20 flex h-7 items-center gap-1 rounded-full bg-black/60 px-2.5 text-[10px] font-bold uppercase tracking-widest text-white opacity-0 transition group-hover:opacity-100 md:h-6"
+        title={`Replace page ${index + 1}`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+          <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h1.401a.75.75 0 0 0 0-1.5H3.443a.75.75 0 0 0-.75.75v3.757a.75.75 0 0 0 1.5 0v-1.94l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.389Zm1.23-3.723a.75.75 0 0 0 .219-.53V3.415a.75.75 0 0 0-1.5 0v1.94l-.31-.31A7 7 0 0 0 3.239 8.184a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.107l.311.31h-1.4a.75.75 0 0 0 0 1.5h3.757a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+        </svg>
+        Replace
       </button>
 
       {/* Preview button */}
@@ -236,7 +250,9 @@ export default function UploadPage() {
   const [uploadLog, setUploadLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor),
@@ -360,6 +376,67 @@ export default function UploadPage() {
     setTimeout(() => setUploadLog([]), 4000);
   };
 
+  const openReplace = (filename: string) => {
+    setReplaceTarget(filename);
+    replaceInputRef.current?.click();
+  };
+
+  const handleReplace = async (files: FileList | null) => {
+    const target = replaceTarget;
+    setReplaceTarget(null);
+    if (!target || !files || files.length === 0) return;
+
+    const file = files[0];
+    setUploading(true);
+    setError(null);
+    const log = [`Compressing ${file.name}…`];
+    setUploadLog([...log]);
+
+    let compressed: File;
+    try {
+      compressed = await compressImage(file);
+    } catch {
+      log[0] = `✗ ${file.name}: compression failed`;
+      setUploadLog([...log]);
+      setUploading(false);
+      return;
+    }
+
+    log[0] = `Replacing with ${compressed.name}…`;
+    setUploadLog([...log]);
+
+    const formData = new FormData();
+    formData.append("image", compressed);
+    formData.append("filename", target);
+
+    try {
+      const res = await fetch("/api/menu-images", { method: "PUT", body: formData });
+      if (res.ok) {
+        const data = (await res.json()) as { position: number };
+        log[0] = `✓ page ${data.position} replaced with ${compressed.name}`;
+      } else {
+        const body = await res.text();
+        let detail = body.slice(0, 200);
+        try {
+          detail = (JSON.parse(body) as { error?: string }).error ?? detail;
+        } catch {
+          /* not JSON — keep the raw body */
+        }
+        log[0] = `✗ ${file.name}: HTTP ${res.status} — ${detail}`;
+        setError(detail);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "network error";
+      log[0] = `✗ ${file.name}: ${msg}`;
+      setError(msg);
+    }
+
+    setUploadLog([...log]);
+    await fetchImages();
+    setUploading(false);
+    setTimeout(() => setUploadLog([]), 4000);
+  };
+
   const handleDelete = async (filename: string) => {
     if (!confirm("Delete this image from the menu?")) return;
     const res = await fetch(`/api/menu-images?filename=${encodeURIComponent(filename)}`, {
@@ -475,6 +552,7 @@ export default function UploadPage() {
                       index={index}
                       onDelete={handleDelete}
                       onPreview={setPreviewIndex}
+                      onReplace={openReplace}
                     />
                   ))}
                 </div>
@@ -483,6 +561,19 @@ export default function UploadPage() {
           </div>
         )}
       </div>
+
+      {/* Replace picker — kept outside the drop zone so its click doesn't reopen that */}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onClick={(e) => {
+          // Allow picking the same file again after a failed attempt.
+          (e.target as HTMLInputElement).value = "";
+        }}
+        onChange={(e) => void handleReplace(e.target.files)}
+      />
 
       {/* Lightbox */}
       {previewIndex !== null && (

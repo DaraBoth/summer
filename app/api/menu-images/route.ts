@@ -87,6 +87,74 @@ export async function POST(request: Request) {
   }
 }
 
+// Swap one image's file while keeping the page it sits on.
+export async function PUT(request: Request) {
+  if (!CHANNEL) return channelRequired();
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get("image");
+    const target = formData.get("filename");
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No image file provided." }, { status: 400 });
+    }
+    if (typeof target !== "string" || !target) {
+      return NextResponse.json({ error: "filename is required" }, { status: 400 });
+    }
+
+    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+    const filename = `${uuidv4()}.${ext}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(MENU_BUCKET)
+      .upload(getStoragePath(filename), buffer, {
+        contentType: file.type || "image/png",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
+
+    // Read as late as possible so the slot lookup reflects the current order.
+    const manifest = await readManifest();
+    const index = manifest.images.findIndex((e) => e.filename === target);
+
+    if (index === -1) {
+      // Nothing to replace — drop the file we just uploaded rather than orphan it.
+      await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(filename)]);
+      return NextResponse.json(
+        { error: "That image is no longer in the menu; refresh and try again." },
+        { status: 404 }
+      );
+    }
+
+    const newEntry: ManifestEntry = {
+      filename,
+      originalName: file.name,
+      uploadedAt: new Date().toISOString(),
+    };
+    manifest.images[index] = newEntry;
+    await writeManifest(manifest);
+
+    // Safe to delete only once the manifest no longer points at it.
+    await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(target)]);
+
+    return NextResponse.json({
+      ...newEntry,
+      url: getPublicUrl(filename),
+      position: index + 1,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Replace failed" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: Request) {
   if (!CHANNEL) return channelRequired();
 
