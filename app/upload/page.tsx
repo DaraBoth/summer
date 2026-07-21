@@ -76,6 +76,53 @@ async function compressImage(file: File): Promise<File> {
   });
 }
 
+// ─── Upload with progress ─────────────────────────────────────────────────────
+
+interface SendResult {
+  ok: boolean;
+  status: number;
+  body: string;
+}
+
+// fetch() cannot report upload progress, so send the body over XHR instead.
+function sendWithProgress(
+  method: string,
+  url: string,
+  body: FormData,
+  onProgress: (percent: number) => void
+): Promise<SendResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () =>
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body: xhr.responseText });
+    xhr.onerror = () => reject(new Error("network error"));
+    xhr.onabort = () => reject(new Error("upload cancelled"));
+
+    xhr.send(body);
+  });
+}
+
+function errorFrom(body: string, fallback: string): string {
+  try {
+    return (JSON.parse(body) as { error?: string }).error ?? fallback;
+  } catch {
+    return body.slice(0, 200) || fallback;
+  }
+}
+
+type ReplacePhase = "compressing" | "uploading" | "saving";
+
+const PHASE_LABEL: Record<ReplacePhase, string> = {
+  compressing: "Compressing",
+  uploading: "Uploading",
+  saving: "Saving",
+};
+
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 interface LightboxProps {
@@ -166,9 +213,10 @@ interface SortableCardProps {
   onDelete: (filename: string) => void;
   onPreview: (index: number) => void;
   onReplace: (filename: string) => void;
+  progress: { percent: number; phase: ReplacePhase } | null;
 }
 
-function SortableCard({ img, index, onDelete, onPreview, onReplace }: SortableCardProps) {
+function SortableCard({ img, index, onDelete, onPreview, onReplace, progress }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: img.filename });
 
@@ -182,11 +230,31 @@ function SortableCard({ img, index, onDelete, onPreview, onReplace }: SortableCa
           : "border-[var(--border-light)]"
       }`}
     >
+      {/* Replace progress */}
+      {progress && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/75 px-4">
+          <div className="font-menu-title text-3xl text-[var(--accent-dark)] tabular-nums">
+            {progress.percent}%
+          </div>
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
+            <div
+              className="h-full rounded-full bg-[var(--accent-forest)] transition-[width] duration-200 ease-out"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+          <p className="mt-2 font-body text-[9px] uppercase tracking-[0.25em] text-white/70">
+            {PHASE_LABEL[progress.phase]}
+          </p>
+        </div>
+      )}
+
       {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing touch-none"
+        className={`absolute inset-0 z-10 cursor-grab active:cursor-grabbing touch-none ${
+          progress ? "pointer-events-none" : ""
+        }`}
       />
 
       {/* Page number */}
@@ -251,6 +319,11 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
+  const [replaceProgress, setReplaceProgress] = useState<{
+    filename: string;
+    percent: number;
+    phase: ReplacePhase;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
@@ -323,15 +396,21 @@ export default function UploadPage() {
     setError(null);
     const log: string[] = [];
 
-    for (const file of Array.from(files)) {
-      log.push(`Compressing ${file.name}…`);
+    const queue = Array.from(files);
+
+    for (let n = 0; n < queue.length; n++) {
+      const file = queue[n];
+      const counter = queue.length > 1 ? `(${n + 1}/${queue.length}) ` : "";
+      const line = log.length;
+
+      log.push(`${counter}Compressing ${file.name}…`);
       setUploadLog([...log]);
 
       let compressed: File;
       try {
         compressed = await compressImage(file);
       } catch {
-        log[log.length - 1] = `✗ ${file.name}: compression failed`;
+        log[line] = `✗ ${counter}${file.name}: compression failed`;
         setUploadLog([...log]);
         continue;
       }
@@ -341,31 +420,27 @@ export default function UploadPage() {
           ? ` ${formatKB(file.size)} → ${formatKB(compressed.size)}`
           : ` ${formatKB(file.size)}`;
 
-      log[log.length - 1] = `Uploading ${compressed.name}${sizeNote}…`;
-      setUploadLog([...log]);
-
       const formData = new FormData();
       formData.append("image", compressed);
       try {
-        const res = await fetch("/api/menu-images", { method: "POST", body: formData });
+        const res = await sendWithProgress("POST", "/api/menu-images", formData, (percent) => {
+          // At 100% the bytes are sent but the server is still writing the manifest.
+          const verb = percent < 100 ? "Uploading" : "Saving";
+          log[line] = `${counter}${verb} ${compressed.name}${sizeNote} — ${percent}%`;
+          setUploadLog([...log]);
+        });
 
         if (res.ok) {
-          log[log.length - 1] = `✓ ${compressed.name}${sizeNote}`;
+          log[line] = `✓ ${counter}${compressed.name}${sizeNote}`;
         } else {
           // Show what the server actually said, not a generic failure.
-          const body = await res.text();
-          let detail = body.slice(0, 200);
-          try {
-            detail = (JSON.parse(body) as { error?: string }).error ?? detail;
-          } catch {
-            /* not JSON — keep the raw body */
-          }
-          log[log.length - 1] = `✗ ${file.name}: HTTP ${res.status} — ${detail}`;
+          const detail = errorFrom(res.body, `HTTP ${res.status}`);
+          log[line] = `✗ ${counter}${file.name}: HTTP ${res.status} — ${detail}`;
           setError(detail);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "network error";
-        log[log.length - 1] = `✗ ${file.name}: ${msg}`;
+        log[line] = `✗ ${counter}${file.name}: ${msg}`;
         setError(msg);
       }
       setUploadLog([...log]);
@@ -389,52 +464,49 @@ export default function UploadPage() {
     const file = files[0];
     setUploading(true);
     setError(null);
-    const log = [`Compressing ${file.name}…`];
-    setUploadLog([...log]);
+    setReplaceProgress({ filename: target, percent: 0, phase: "compressing" });
 
     let compressed: File;
     try {
       compressed = await compressImage(file);
     } catch {
-      log[0] = `✗ ${file.name}: compression failed`;
-      setUploadLog([...log]);
+      setError(`${file.name}: compression failed`);
+      setReplaceProgress(null);
       setUploading(false);
       return;
     }
-
-    log[0] = `Replacing with ${compressed.name}…`;
-    setUploadLog([...log]);
 
     const formData = new FormData();
     formData.append("image", compressed);
     formData.append("filename", target);
 
     try {
-      const res = await fetch("/api/menu-images", { method: "PUT", body: formData });
+      setReplaceProgress({ filename: target, percent: 0, phase: "uploading" });
+
+      const res = await sendWithProgress("PUT", "/api/menu-images", formData, (percent) =>
+        // At 100% the bytes are sent but the server is still writing the manifest.
+        setReplaceProgress({
+          filename: target,
+          percent,
+          phase: percent < 100 ? "uploading" : "saving",
+        })
+      );
+
       if (res.ok) {
-        const data = (await res.json()) as { position: number };
-        log[0] = `✓ page ${data.position} replaced with ${compressed.name}`;
+        const { position } = JSON.parse(res.body) as { position: number };
+        setUploadLog([`✓ page ${position} replaced with ${compressed.name}`]);
+        setTimeout(() => setUploadLog([]), 4000);
       } else {
-        const body = await res.text();
-        let detail = body.slice(0, 200);
-        try {
-          detail = (JSON.parse(body) as { error?: string }).error ?? detail;
-        } catch {
-          /* not JSON — keep the raw body */
-        }
-        log[0] = `✗ ${file.name}: HTTP ${res.status} — ${detail}`;
+        const detail = errorFrom(res.body, `HTTP ${res.status}`);
         setError(detail);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "network error";
-      log[0] = `✗ ${file.name}: ${msg}`;
-      setError(msg);
+      setError(err instanceof Error ? err.message : "network error");
     }
 
-    setUploadLog([...log]);
+    setReplaceProgress(null);
     await fetchImages();
     setUploading(false);
-    setTimeout(() => setUploadLog([]), 4000);
   };
 
   const handleDelete = async (filename: string) => {
@@ -553,6 +625,11 @@ export default function UploadPage() {
                       onDelete={handleDelete}
                       onPreview={setPreviewIndex}
                       onReplace={openReplace}
+                      progress={
+                        replaceProgress?.filename === img.filename
+                          ? { percent: replaceProgress.percent, phase: replaceProgress.phase }
+                          : null
+                      }
                     />
                   ))}
                 </div>
