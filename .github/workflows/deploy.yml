@@ -1,0 +1,23 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # The server-side authorized_keys entry for this key is locked to a
+          # forced command (/opt/hermess/scripts/deploy-summer.sh), so
+          # whatever is requested here is ignored server-side — this just
+          # opens the SSH session that runs it.
+          script: echo "deploying..."
+          command_timeout: 10m

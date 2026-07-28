@@ -92,4 +92,22 @@ Custom font utility classes (CSS, not Tailwind): `.font-menu-title` (Playfair Di
 
 ### Deployment
 
-Deployed to Vercel. `vercel.json` sets framework to `nextjs`, install via `pnpm install --frozen-lockfile`, build via `pnpm build`. Images are unoptimized (`next.config.mjs`). The `/menu.pdf` URL rewrites to `/api/pdf`.
+Self-hosted on an EC2 instance via Docker + Nginx (not Vercel — `vercel.json` is a leftover from the prior deployment and is unused; harmless to ignore). See `/opt/hermess/CLAUDE.md` for full server context.
+
+Two containers run from the **same image** (`hermess-summer:latest`, built from this directory's `Dockerfile`), differing only by `.env.*` — chiefly `CHANNEL`:
+
+| Host | Container | `CHANNEL` |
+|---|---|---|
+| `oldsummer.filessecond.com` | `hermess-summer` | `summer` |
+| `balcony.filessecond.com` | `hermess-balcony` | `balcony` |
+
+Nginx (in `/opt/hermess/nginx/`) terminates TLS (real Let's Encrypt certs, auto-renewed) and reverse-proxies each subdomain to its container over the `hermess_net` Docker network. Neither app container publishes port 3000 to the host — only Nginx is reachable from outside.
+
+`next.config.mjs` sets `output: "standalone"` for the Docker build. Images are unoptimized (`next.config.mjs`), so `sharp` (present in `pnpm-lock.yaml` for other reasons) is never invoked at runtime. `lib/supabaseAdmin.ts` constructs its Supabase client at module load time, which means `next build` needs real `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` values — the `Dockerfile` passes these as a build arg + a BuildKit build secret respectively, not baked into the final image's env.
+
+Redeploy after a code change (also runs automatically on push to `main` via `.github/workflows/deploy.yml`):
+```bash
+cd /opt/hermess/apps/summer
+docker compose build
+docker compose up -d
+```

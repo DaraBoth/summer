@@ -1,0 +1,48 @@
+name: hermess-summer
+
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      NEXT_PUBLIC_SUPABASE_URL: https://unubcoxmubditdgqgnqa.supabase.co
+    secrets:
+      - supabase_service_role_key
+  image: hermess-summer:latest
+  restart: unless-stopped
+  networks:
+    - hermess_net
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  healthcheck:
+    test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/api/channel"]
+    interval: 30s
+    timeout: 5s
+    start_period: 15s
+    retries: 3
+  # Intentionally no `ports:` — reached only via the Nginx reverse proxy
+  # over hermess_net. Never publish 3000 to the host.
+
+services:
+  summer:
+    <<: *app-common
+    container_name: hermess-summer
+    env_file:
+      - .env.summer
+
+  balcony:
+    <<: *app-common
+    container_name: hermess-balcony
+    env_file:
+      - .env.balcony
+
+networks:
+  hermess_net:
+    external: true
+
+secrets:
+  supabase_service_role_key:
+    file: ./.env.build.supabase_service_role_key
