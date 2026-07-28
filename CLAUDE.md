@@ -38,15 +38,15 @@ This is a **Next.js 16 App Router** project (React 19, TypeScript, Tailwind CSS,
 
 `hooks/useMenuStore.ts` is the central state hook. It persists `MenuBook` to IndexedDB via **localforage** (key: `food-menu-v3`, instance: `summer-menu-storage`). On first load it calls `/api/public-files` to discover which `/public/menu/menu-{N}.png` files exist and builds a dynamic default menu from them. A migration function (`migrateLegacyPageBackgrounds`) handles v2→v3 schema upgrades.
 
-### Menu Update Flow — Supabase Storage
+### Menu Update Flow — local filesystem storage
 
-Images are stored in a Supabase Storage bucket named `menu`. Order is tracked in a `_manifest.json` file inside the same bucket.
+Images and the per-channel manifest live on local disk under `UPLOAD_ROOT/CHANNEL/` (`UPLOAD_ROOT` defaults to `/app/uploads`, bind-mounted in production to `/opt/hermess/data/summer/uploads` so uploads survive redeploys — see `/opt/hermess/CLAUDE.md`). **Not Supabase** — that was fully replaced; `@supabase/supabase-js` is no longer a dependency.
 
-**Upload page** (`/upload`, protected): User uploads images → `POST /api/menu-images` → stored in Supabase with UUID filename → `_manifest.json` updated with new entry.
+**Upload page** (`/upload`, protected): User uploads images → `POST /api/menu-images` → saved to `UPLOAD_ROOT/CHANNEL/<uuid>.<ext>` → `_manifest.json` in the same directory updated with new entry.
 
-**Home page** (`/`): `PublicMenu` fetches `GET /api/menu-images` on mount → reads manifest from Supabase → builds `MenuBook` from ordered image URLs → renders via `VerticalMenuScroll`. Always shows the latest images regardless of local browser state.
+**Home page** (`/`): `PublicMenu` fetches `GET /api/menu-images` on mount → reads the local manifest → builds `MenuBook` from ordered image URLs (`/uploads/<filename>`, served directly by Nginx, not proxied through Node) → renders via `VerticalMenuScroll`.
 
-**Server-side** (`lib/supabaseAdmin.ts`): `supabaseAdmin` uses the service role key. `readManifest` / `writeManifest` download/upload `_manifest.json` as JSON. `getPublicUrl` constructs public CDN URLs.
+**Server-side** (`lib/fileStorage.ts`): `readManifest`/`writeManifest` (atomic write-then-rename), `saveImage`, `removeImages`, `getPublicUrl`. Validates filenames against `^[a-zA-Z0-9-]+\.(jpg|jpeg|png|gif|webp|avif)$` before any filesystem call — required because, unlike Supabase Storage keys, these are now real paths (path traversal risk if unvalidated).
 
 **n8n automation** (`n8n/`): An n8n webhook workflow receives a PDF, runs `n8n/pdf_to_png_zip.py` (requires `pypdfium2`) to render at 2x scale. The resulting images can then be uploaded individually to `/api/menu-images`.
 
@@ -57,10 +57,12 @@ Images are stored in a Supabase Storage bucket named `menu`. Order is tracked in
 | `GET /api/pdf` | Serves `public/menu.pdf` or `public/Summer202026.pdf` with gzip/brotli compression and ETag caching |
 | `GET /api/pdf-worker` | Proxies `pdfjs-dist/build/pdf.worker.min.mjs` with immutable caching |
 | `GET /api/public-files` | Recursively lists all files under `public/` (used by QR page) |
-| `GET /api/menu-images` | Returns ordered image list from Supabase manifest |
-| `POST /api/menu-images` | Upload a single image (`multipart/form-data`, field `image`) to Supabase |
-| `DELETE /api/menu-images?filename=x` | Remove image from Supabase bucket and manifest |
+| `GET /api/menu-images` | Returns ordered image list from the local manifest |
+| `POST /api/menu-images` | Upload a single image (`multipart/form-data`, field `image`) to local disk |
+| `DELETE /api/menu-images?filename=x` | Remove image from disk and manifest |
 | `PATCH /api/menu-images` | Reorder images — body `{ order: string[] }` (array of filenames) |
+
+Note: none of these routes are behind `proxy.ts`'s Basic Auth — that middleware only matches `/edit`, `/upload`, `/split` (the *pages*), not `/api/*`. This was already true before the storage migration; flagged here since it's easy to assume the API inherits the page's auth.
 
 All API routes use `runtime = "nodejs"`.
 
@@ -103,7 +105,9 @@ Two containers run from the **same image** (`hermess-summer:latest`, built from 
 
 Nginx (in `/opt/hermess/nginx/`) terminates TLS (real Let's Encrypt certs, auto-renewed) and reverse-proxies each subdomain to its container over the `hermess_net` Docker network. Neither app container publishes port 3000 to the host — only Nginx is reachable from outside.
 
-`next.config.mjs` sets `output: "standalone"` for the Docker build. Images are unoptimized (`next.config.mjs`), so `sharp` (present in `pnpm-lock.yaml` for other reasons) is never invoked at runtime. `lib/supabaseAdmin.ts` constructs its Supabase client at module load time, which means `next build` needs real `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` values — the `Dockerfile` passes these as a build arg + a BuildKit build secret respectively, not baked into the final image's env.
+`next.config.mjs` sets `output: "standalone"` for the Docker build. Images are unoptimized (`next.config.mjs`), so `sharp` (present in `pnpm-lock.yaml` for other reasons) is never invoked at runtime.
+
+**Gotcha, already hit once:** several pages (`/upload`, `/edit`, `/split`, `/QR`, `/QR/pdf`, `/menu-replacer`, `/swipe`) are statically prerendered by Next.js. Since one built image is shared by both `CHANNEL`-differentiated containers, anything reading `process.env.CHANNEL` in a component that's part of a static page gets baked in at *build* time — when `CHANNEL` is never set (it's runtime-only, per-container). `app/layout.tsx` does exactly this, so it sets `export const dynamic = "force-dynamic"` to force every route to render per-request instead. If a future change reintroduces a build-time env read in a shared layout/component, expect the same class of bug — it won't show up on `/` (already dynamic for other reasons) or in curl tests against only `/api/*`, only on the statically-generated pages.
 
 Redeploy after a code change (also runs automatically on push to `main` via `.github/workflows/deploy.yml`):
 ```bash
