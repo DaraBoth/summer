@@ -8,6 +8,13 @@ export const metadata: Metadata = {
   description: "Interactive digital restaurant menu with page flip",
 };
 
+// One built image is shared by multiple CHANNEL-differentiated containers
+// (see /opt/hermess/CLAUDE.md), so this must read process.env.CHANNEL at
+// request time, not get baked into a statically prerendered page at build
+// time — force-dynamic makes every route under this layout render per
+// request instead of being prerendered once during `next build`.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{
