@@ -4,14 +4,17 @@ x-app-common: &app-common
   build:
     context: .
     dockerfile: Dockerfile
-    args:
-      NEXT_PUBLIC_SUPABASE_URL: https://unubcoxmubditdgqgnqa.supabase.co
-    secrets:
-      - supabase_service_role_key
   image: hermess-summer:latest
   restart: unless-stopped
   networks:
     - hermess_net
+  volumes:
+    # Persistent, bind-mounted so uploaded images/manifest survive every
+    # redeploy (containers are rebuilt from scratch on every `docker compose
+    # up -d` / auto-deploy — anything written only inside the container
+    # would be wiped). Each channel writes only to its own CHANNEL
+    # subdirectory under this shared mount.
+    - /opt/hermess/data/summer/uploads:/app/uploads
   logging:
     driver: json-file
     options:
@@ -42,7 +45,3 @@ services:
 networks:
   hermess_net:
     external: true
-
-secrets:
-  supabase_service_role_key:
-    file: ./.env.build.supabase_service_role_key

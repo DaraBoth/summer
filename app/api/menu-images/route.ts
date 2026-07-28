@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import {
-  supabaseAdmin,
-  MENU_BUCKET,
   CHANNEL,
   getPublicUrl,
-  getStoragePath,
   readManifest,
   writeManifest,
+  saveImage,
+  removeImages,
+  sanitizeExtension,
   ManifestEntry,
-} from "@/lib/supabaseAdmin";
+} from "@/lib/fileStorage";
 
 export const runtime = "nodejs";
 
@@ -49,19 +49,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No image file provided." }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+    const ext = sanitizeExtension(file.name);
     const filename = `${uuidv4()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from(MENU_BUCKET)
-      .upload(getStoragePath(filename), buffer, {
-        contentType: file.type || "image/png",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    try {
+      await saveImage(filename, buffer);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Upload failed" },
+        { status: 500 }
+      );
     }
 
     const manifest = await readManifest();
@@ -103,19 +101,17 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+    const ext = sanitizeExtension(file.name);
     const filename = `${uuidv4()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from(MENU_BUCKET)
-      .upload(getStoragePath(filename), buffer, {
-        contentType: file.type || "image/png",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    try {
+      await saveImage(filename, buffer);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Upload failed" },
+        { status: 500 }
+      );
     }
 
     // Read as late as possible so the slot lookup reflects the current order.
@@ -124,7 +120,7 @@ export async function PUT(request: Request) {
 
     if (index === -1) {
       // Nothing to replace — drop the file we just uploaded rather than orphan it.
-      await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(filename)]);
+      await removeImages([filename]);
       return NextResponse.json(
         { error: "That image is no longer in the menu; refresh and try again." },
         { status: 404 }
@@ -140,7 +136,7 @@ export async function PUT(request: Request) {
     await writeManifest(manifest);
 
     // Safe to delete only once the manifest no longer points at it.
-    await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(target)]);
+    await removeImages([target]);
 
     return NextResponse.json({
       ...newEntry,
@@ -165,19 +161,19 @@ export async function DELETE(request: Request) {
 
     if (all === "true") {
       const manifest = await readManifest();
-      const paths = manifest.images.map((e) => getStoragePath(e.filename));
-      if (paths.length > 0) {
-        await supabaseAdmin.storage.from(MENU_BUCKET).remove(paths);
+      const filenames = manifest.images.map((e) => e.filename);
+      if (filenames.length > 0) {
+        await removeImages(filenames);
       }
       await writeManifest({ images: [] });
-      return NextResponse.json({ ok: true, removed: paths.length });
+      return NextResponse.json({ ok: true, removed: filenames.length });
     }
 
     if (!filename) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
     }
 
-    await supabaseAdmin.storage.from(MENU_BUCKET).remove([getStoragePath(filename)]);
+    await removeImages([filename]);
 
     const manifest = await readManifest();
     manifest.images = manifest.images.filter((e) => e.filename !== filename);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { CHANNEL } from "@/lib/supabaseAdmin";
+import { CHANNEL } from "@/lib/fileStorage";
 
 export const runtime = "nodejs";
 
