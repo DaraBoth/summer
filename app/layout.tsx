@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import "swiper/css";
 import "swiper/css/effect-creative";
@@ -42,9 +43,28 @@ export default function RootLayout({
     );
   }
 
+  // Read at request time for the same reason CHANNEL is: summer and balcony
+  // are one image in two containers, so a build-time NEXT_PUBLIC_ variable
+  // would bake a single site's ID into both and merge their stats.
+  const umamiWebsiteId = process.env.UMAMI_WEBSITE_ID;
+  const umamiSrc =
+    process.env.UMAMI_SRC ?? "https://analytics.filessecond.com/script.js";
+
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        {/* Absent env var = no tracking, which is the right default: local
+            dev and any future deployment stay out of production stats
+            without needing to remember to disable anything. */}
+        {umamiWebsiteId ? (
+          <Script
+            src={umamiSrc}
+            data-website-id={umamiWebsiteId}
+            strategy="afterInteractive"
+          />
+        ) : null}
+      </body>
     </html>
   );
 }
